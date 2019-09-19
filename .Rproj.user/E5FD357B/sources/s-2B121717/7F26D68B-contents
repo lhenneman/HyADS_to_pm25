@@ -1,0 +1,763 @@
+## change to point to downloaded "data" directory
+direct.dat <- '~/Desktop/Energy_Transitions/Data_and_code/data'
+
+## -------------------------------------------------------------------- ##
+##                    Install/load libraries                            ##
+## -------------------------------------------------------------------- ##
+library( data.table)
+library( ggplot2)
+library( cowplot)
+library( ggnewscale)
+library( scales)
+library( sf)
+library( viridis)
+
+
+## -------------------------------------------------------------------- ##
+##                            Define functions                          ##
+## -------------------------------------------------------------------- ##
+'%ni%' <- Negate('%in%')
+
+## calculate changes due to emissions and meteorology
+# call inside data.table with plume and emissions changes labeled P1, E1, etc
+# db = 'firstavail' for reference time period as first available
+# db = [number] for number of time periods before
+# met_base and emiss_base = 'base_XXX' to ground to base year, 'later_XXX' to ground to later year
+emiss_met_tot_worker <- function( dt, 
+                                  newcolnames,
+                                  colmetrics,
+                                  emiss_met_tot = 'tot', 
+                                  met_base = 'later_emiss',
+                                  emiss_base = 'base_met',
+                                  db = 'firstavail') { 
+  
+  if( emiss_met_tot == 'tot')
+    dt[, (newcolnames) := lapply( colmetrics, 
+                                  function(x){  y <- ifelse( db == 'firstavail', 1, x - db)
+                                  if( y < 1)
+                                    return( NA)
+                                  
+                                  PyEy <- paste0( 'P', y,
+                                                  'E', y)
+                                  PxEy <- paste0( 'P', x,
+                                                  'E', y)
+                                  PxEx <- paste0( 'P', x,
+                                                  'E', x)
+                                  PyEx <- paste0( 'P', y,
+                                                  'E', x)
+                                  
+                                  get( PxEx) - get( PyEy)
+                                  })]
+  
+  if( emiss_met_tot == 'met')
+    dt[, (newcolnames) := lapply( colmetrics, 
+                                  function(x){  y <- ifelse( db == 'firstavail', 1, x - db)
+                                  if( y < 1)
+                                    return( NA)
+                                  
+                                  PyEy <- paste0( 'P', y,
+                                                  'E', y)
+                                  PxEy <- paste0( 'P', x,
+                                                  'E', y)
+                                  PxEx <- paste0( 'P', x,
+                                                  'E', x)
+                                  PyEx <- paste0( 'P', y,
+                                                  'E', x)
+                                  
+                                  if( met_base == 'later_emiss'){
+                                    get( PxEx) - get( PyEx)
+                                  } else if( met_base == 'base_emiss'){
+                                    get( PxEy) - get( PyEy)
+                                  } else
+                                    stop( 'met_base should be one of "later_emiss" or "base_emiss".')
+                                  })]
+  
+  if( emiss_met_tot == 'emiss')
+    dt[, (newcolnames) := lapply( colmetrics, 
+                                  function(x){  y <- ifelse( db == 'firstavail', 1, x - db)
+                                  if( y < 1)
+                                    return( NA)
+                                  
+                                  PyEy <- paste0( 'P', y,
+                                                  'E', y)
+                                  PxEy <- paste0( 'P', x,
+                                                  'E', y)
+                                  PxEx <- paste0( 'P', x,
+                                                  'E', x)
+                                  PyEx <- paste0( 'P', y,
+                                                  'E', x)
+                                  
+                                  if( emiss_base == 'later_met'){
+                                    get( PxEx) - get( PxEy)
+                                  } else if( emiss_base == 'base_met'){
+                                    get( PyEx) - get( PyEy)
+                                  } else
+                                    stop( 'emiss_base should be one of "later_met" or "base_met".')
+                                  })]
+  
+  return( dt)
+}
+
+
+# emiss/met changes
+# diff.base = 'firstavail' for reference time period as first available
+# diff.base = [number] for number of time periods before
+# hysplit.emisspd.hysppd.names - names of hysplit, emissions year, and hysplit year
+change.dtifier <- function( changes = copy( month.changes.0809),
+                            sum.by.zip = T,
+                            hysplit.emisspd.hysppd.names = c( 'hyspdisp', 'yearmonth_emiss', 'yearmonth_hyspd'),
+                            diff.base = 'firstavail', 
+                            met_base = 'later_emiss',
+                            emiss_base = 'base_met'){
+  # housekeeping
+  changes <- copy( changes)
+  setnames( changes, hysplit.emisspd.hysppd.names, 
+            c( 'HyADS', 'year_month.E', 'year_month.M'))
+  periods <- sort( unique( changes$year_month.E))
+  num.periods <- length( periods)
+  month.months <- data.table( expand.grid( year_month.M = periods, 
+                                           year_month.E = periods))
+  
+  # rename years
+  numsandnamesE <- data.table( nums.E = 1:num.periods,
+                               year_month.E = periods)
+  numsandnamesH <- data.table( nums.H = 1:num.periods,
+                               year_month.M = periods)
+  
+  changes.me <- merge(   changes, numsandnamesE,
+                         by = 'year_month.E')
+  changes.me <- merge(   changes.me, numsandnamesH,
+                         by = 'year_month.M')
+  changes.me[, exposure.label := paste0( 'P', nums.H,
+                                         'E', nums.E)]
+  
+  # cast for subtractions
+  changes.dt <- dcast.data.table( changes.me, fun.aggregate = sum,
+                                  ZIP ~ exposure.label, value.var = 'HyADS')
+  
+  # do the subtractions 
+  metrics.tot <- 2:num.periods
+  names.tot <- paste0( 'tot', metrics.tot)
+  changes.dt <- emiss_met_tot_worker( dt = changes.dt, 
+                                      newcolnames = names.tot,
+                                      colmetrics = metrics.tot,
+                                      emiss_met_tot = 'tot', 
+                                      db = diff.base, 
+                                      met_base = met_base,
+                                      emiss_base = emiss_base)
+  
+  # calculate changes due to met
+  metrics.met <- 2:num.periods
+  names.met <- paste0( 'met', metrics.met)
+  changes.dt <- emiss_met_tot_worker( dt = changes.dt, 
+                                      newcolnames = names.met,
+                                      colmetrics = metrics.met,
+                                      emiss_met_tot = 'met', 
+                                      db = diff.base, 
+                                      met_base = met_base,
+                                      emiss_base = emiss_base)
+  
+  # calculate changes due to emiss
+  metrics.emiss <- 2:num.periods
+  names.emiss <- paste0( 'emiss', metrics.emiss)
+  changes.dt <- emiss_met_tot_worker( dt = changes.dt, 
+                                      newcolnames = names.emiss,
+                                      colmetrics = metrics.emiss,
+                                      emiss_met_tot = 'emiss', 
+                                      db = diff.base, 
+                                      met_base = met_base,
+                                      emiss_base = emiss_base)
+  
+  # combine into single data.table, melt to long format
+  changes.dt.m <- melt( changes.dt, id.vars = c( 'ZIP'), 
+                        measure.vars = c( names.tot,
+                                          names.met,
+                                          names.emiss),
+                        value.name = 'diff.rel')
+  
+  # Define relative months, difference types (emiss, met, tot)
+  changes.dt.m[, `:=` ( ZIP = formatC( ZIP, width = 5, flag = '0'),
+                        diff.type = gsub( '[0-9]', '', variable),
+                        rel.pd = as( gsub( '[a-z]', '', variable), 'integer'))][, variable := NULL]
+  changes.dt.m <- merge( changes.dt.m, numsandnamesE,
+                         by.x = 'rel.pd', by.y = 'nums.E')
+  
+  # sum by zip if called
+  if( sum.by.zip){
+    changes.dt.m <- changes.dt.m[, sum( diff.rel), 
+                                 by = .( ZIP, rel.pd, diff.type, year_month.E)]
+    setnames( changes.dt.m, 'V1', 'diff.rel')
+  }
+  
+  setnames( changes.dt.m, 'year_month.E', 'year_month')
+  return( changes.dt.m)
+}
+
+# load and edit quarter Louisville dataset
+quarter.loader <- function( file.in,
+                            base.year = 2012,
+                            return.timeseries.quarter.dt = FALSE){
+  timeseries.dt <- fread( file.in)[, V1 := NULL]
+  
+  # create month variable
+  timeseries.dt[, date.month := as.Date( paste( year, 
+                                                formatC( month, width = 2, flag = '0'),
+                                                '01',
+                                                sep ='-'))]
+  
+  # change NA's to 0
+  timeseries.dt[ is.na( exposure), exposure := 0]
+  timeseries.dt[ is.na( emiss_so2), emiss_so2 := 0]
+  
+  # create quarterly time series
+  quarts <- c( rep( 1, 3),
+               rep( 2, 3),
+               rep( 3, 3),
+               rep( 4, 3))
+  names(quarts) <- 1:12
+  timeseries.dt[, quarter := quarts[month]]
+  
+  # take mean of hyads_raw and sum of emissions 
+  names.mean <- c( 'hyads_raw', 'emiss_so2', 'exposure')
+  timeseries.quarter.dt.h <- timeseries.dt[, lapply('hyads_raw', function(x) { mean( get( x),
+                                                                                     na.rm = T)}),
+                                           by = .( ZIP, year, uID, quarter)]
+  timeseries.quarter.dt.e <- timeseries.dt[, lapply('emiss_so2', function(x) { sum( get( x),
+                                                                                    na.rm = T)}),
+                                           by = .( ZIP, year, uID, quarter)]
+  setnames(timeseries.quarter.dt.h, 'V1', 'hyads_raw')
+  setnames(timeseries.quarter.dt.e, 'V1', 'emiss_so2')
+  
+  # merge emissions and hyspdisp time series
+  timeseries.quarter.dt <- merge( timeseries.quarter.dt.h, timeseries.quarter.dt.e,
+                                  by = c( 'ZIP', 'year', 'uID', 'quarter'))
+  if( return.timeseries.quarter.dt)
+    return( timeseries.quarter.dt)
+  
+  # change to namin conventions
+  quarter.changes <- timeseries.quarter.dt[ year >= base.year]
+  quarter.changes[, year.quarter.M := paste( year, quarter, sep = '.')]
+  
+  # each quarter's emissions by facility
+  quarter.emiss <- quarter.changes[ ,unique( emiss_so2), by = .( uID, year.quarter.M)]
+  setnames( quarter.emiss, c( 'year.quarter.M', 'V1'), c( 'year.quarter.E', 'emiss_so2'))
+  
+  
+  # link emissions/met for counterfactuals
+  quarter.changes[, year.quarter.M := paste( year, quarter, sep = '.')]
+  periods <- sort( unique( quarter.changes$year.quarter.M))
+  quarter.quarters <- data.table( expand.grid( year.quarter.M = periods, 
+                                               year.quarter.E = periods))
+  quarter.changes.me <- merge( quarter.quarters, 
+                               quarter.changes[, .( year.quarter.M, ZIP, uID, hyads_raw)], 
+                               by = 'year.quarter.M', allow.cartesian = T)
+  quarter.changes.me <- merge( quarter.changes.me, quarter.emiss,
+                               by = c( 'year.quarter.E', 'uID'))
+  
+  # calculate HyADS, sum across ZIPs
+  out <- quarter.changes.me[, sum( hyads_raw * emiss_so2),
+                            by = .( ZIP, year.quarter.E, year.quarter.M)]
+  
+  setnames( out, 'V1', 'HyADS')
+  return( out)
+}
+
+#
+## Label by octant
+octanter <- function( dt.c){
+  dt.c <- copy( dt.c)
+  
+  # label arrows
+  q.labs <- c( 'a' = paste0( 'a{M','\u2191\u2191', 'E','\u2193}'),
+               'b' = paste0( 'b{M','\u2191\u2191', 'E','\u2191}'),
+               'c' = paste0( 'c{M','\u2191', 'E','\u2191\u2191}'),
+               'd' = paste0( 'd{M','\u2193', 'E','\u2191\u2191}'),
+               'e' = paste0( 'e{M','\u2193\u2193', 'E','\u2191}'),
+               'f' = paste0( 'f{M','\u2193\u2193', 'E','\u2193}'),
+               'g' = paste0( 'g{M','\u2193', 'E','\u2193\u2193}'),
+               'h' = paste0( 'h{M','\u2191', 'E','\u2193\u2193}'))
+  
+  # assign labels based on emiss and met relative to each other
+  dt.c[ -1 * emiss < met & -1 * met < emiss & emiss < 0 & 1 < frac.met & frac.emiss < 0, 
+        `:=` (octant = 'a', o.name = q.labs['a'])]
+  dt.c[ emiss < met & 0 < emiss & emiss < met & 
+          .5 < frac.met & frac.met < 1 & 0 < frac.emiss & frac.emiss < 0.5, 
+        `:=` (octant = 'b', o.name = q.labs['b'])]
+  dt.c[ 0 < met & met < -1 * emiss & frac.met < 0 & 1 < frac.emiss, 
+        `:=` (octant = 'h', o.name = q.labs['h'])]
+  dt.c[ 0 < met & met < emiss & 0 < frac.met & frac.met < 0.5 & 0.5 < frac.emiss & frac.emiss < 1, 
+        `:=` (octant = 'c', o.name = q.labs['c'])]
+  dt.c[ emiss < met & met < 0 & 0 < frac.met & frac.met < 0.5 & 0.5 < frac.emiss & frac.emiss < 1, 
+        `:=` (octant = 'g', o.name = q.labs['g'])]
+  dt.c[ -1 * emiss < met & met < 0 & frac.met < 0 & 1 < frac.emiss, 
+        `:=` (octant = 'd', o.name = q.labs['d'])]
+  dt.c[ met < emiss & emiss < 0 & 0.5 < frac.met & frac.met < 1 & 0 < frac.emiss & frac.emiss < 0.5, 
+        `:=` (octant = 'f', o.name = q.labs['f'])]
+  dt.c[ met < -1 * emiss & 0 < emiss & 1 < frac.met & frac.emiss < 0, 
+        `:=` (octant = 'e', o.name = q.labs['e'])]
+  
+  # assign "0's" to neighboring octant
+  dt.c[ is.na( octant) & met == 0 & emiss <  0, 
+        `:=` (octant = 'g', o.name = q.labs['g'])]
+  dt.c[ is.na( octant) & met == 0 & emiss >  0, 
+        `:=` (octant = 'c', o.name = q.labs['g'])]
+  dt.c[ is.na( octant) & met >  0 & emiss == 0, 
+        `:=` (octant = 'a',o.name = q.labs['a'])]
+  dt.c[ is.na( octant) & met <  0 & emiss == 0, 
+        `:=` (octant = 'f', o.name = q.labs['f'])]
+  
+  return( dt.c)
+}
+
+# read zcta shapefile and crosswalk
+zip_sf_reader <- function( d = direct.dat){
+  # zcta file downloaded from 'ftp://ftp2.census.gov/geo/tiger/GENZ2016/shp/cb_2016_us_zcta510_500k.zip'
+  zcta_shapefile <- file.path( d, 'gis', 'cb_2016_us_zcta510_500k.shp')
+  
+  # zcta-ZIP crosswalk file downloaded from 'http://mcdc2.missouri.edu/data/corrlst/'
+  crosswalk_csv <- file.path( d, 'gis', 'Zip_to_ZCTA_crosswalk_2015_JSI.csv')
+  cw <- fread( crosswalk_csv)
+  # make sure ZCTA's are 5 digits to merge on zcta ID
+  cw$ZCTA <- formatC( cw$ZCTA, width = 5, format = "d", flag = "0") 
+  
+  zips <- st_read(zcta_shapefile)
+  setnames( zips, 'ZCTA5CE10', 'ZCTA')
+  zips <- merge( zips, cw, by = "ZCTA", all = F, allow.cartesian = TRUE)
+  # make sure ZIPs are 5 digits to merge on zcta ID
+  zips$ZIP <- formatC( zips$ZIP, width = 5, format = "d", flag = "0")
+  
+  return( zips)
+}
+
+## -------------------------------------------------------------------- ##
+##     Load data, limit to ZIPs over lower 48 states for annual/monthly ##
+## -------------------------------------------------------------------- ##
+
+# get zip code dataset in lower 48 states (zip_sf_reader function defined above)
+zips <- zip_sf_reader()
+zips_l48 <- data.table( zips)[ STATE %in% state.abb & STATE %ni% c( 'AK', 'HI')]$ZIP
+
+#annual changes from all units
+annual.changes.all <- fread( file.path( direct.dat, 'hyads', 'ZIPexposures_annual_met_emiss_sum.csv'))[, V1 := NULL]
+annual.changes.all <- annual.changes.all[ ZIP %in% zips_l48]
+
+#monthly changes from scrubber-install units in 2008/9
+month.changes.0809 <- unique( fread( file.path( direct.dat, 'hyads', 'ZIPexposures_monthly_met_emiss_0809scrubbers.csv'))[, V1 := NULL])
+month.changes.0809[, ZIP := formatC( ZIP, width = 5, flag = '0')]
+month.changes.0809 <- month.changes.0809[ ZIP %in% zips_l48]
+
+#quarterly changes from Louisville units (quarter.loader function defined above)
+quarter.changes.lville <- quarter.loader( file.in = file.path( direct.dat, 'hyads', 'louisville_exposure2.csv'))
+
+#quarterly timeseries from Louisville units -- get base (2012-1) data
+quarter.timeseries.lville <- quarter.loader( file.in = file.path( direct.dat, 'hyads', 'louisville_exposure2.csv'),
+                                             return.timeseries.quarter.dt = TRUE)
+quarter.timeseries.lville[, HyADS := hyads_raw * emiss_so2]
+quarter.timeseries.lville.zip <- quarter.timeseries.lville[ , sum( HyADS), by = .( ZIP, quarter, year)]
+quarter.timeseries.lville.zip.2012 <- quarter.timeseries.lville.zip[year == 2012 & quarter == 1]
+setnames( quarter.timeseries.lville.zip.2012, 'V1', 'HyADS2012.1')
+quarter.timeseries.lville.zip.2012[, `:=` ( ZIP = as( ZIP, 'character'),
+                                            quarter = as( quarter, 'character'),
+                                            year = as( year, 'character'))]
+
+## -------------------------------------------------------------------- ##
+## seperate met/emiss change impactsfor primary base year configuration ##
+## -------------------------------------------------------------------- ##
+# calculate emiss/met changes for typical approach (change.dtifier function defined above)
+# ∆Exp_met based on base emissions (met_base = 'base_emiss')
+# ∆Exp_emiss based on current meteorology (emiss_base = 'later_met')
+annual.changes.all.dt <- change.dtifier( annual.changes.all,
+                                         hysplit.emisspd.hysppd.names = c( 'HyADS', 'year.E', 'year.H'), 
+                                         met_base = 'base_emiss',
+                                         emiss_base = 'later_met')
+month.changes.0809.dt <- change.dtifier( month.changes.0809, 
+                                         met_base = 'base_emiss',
+                                         emiss_base = 'later_met')
+quarter.changes.lville.dt <- change.dtifier( quarter.changes.lville,
+                                             hysplit.emisspd.hysppd.names = c( 'HyADS', 'year.quarter.E', 'year.quarter.M'), 
+                                             met_base = 'base_emiss',
+                                             emiss_base = 'later_met')
+
+# calculate emiss/met changes for reverse approach for annual
+# ∆Exp_met based on current emissions (met_base = 'later_emiss')
+# ∆Exp_emiss based on base meteorology (emiss_base = 'base_met')
+# --this object is not used for the plots below, but it could be substituted in
+#   for annual.changes.all.dt
+annual.changes.all.inv.dt <- change.dtifier( annual.changes.all,
+                                             hysplit.emisspd.hysppd.names = c( 'HyADS', 'year.E', 'year.H'))
+
+
+## -------------------------------------------------------------------- ##
+##      Box plots of changing emiss/met/tot                             ##
+## -------------------------------------------------------------------- ##
+## calculate percent relative change by merging 2005 datasets with rest
+## each dataset requires slightly different processing to format correctly for plotting
+# annual
+# -- information in annual.changes.all.sf column diff.frac used to make table SI-2
+annual.changes.all.sf <- merge( annual.changes.all.dt, 
+                                annual.changes.all[year.E == 2005 & year.H == 2005], 
+                                by = c( 'ZIP'))
+annual.changes.all.sf[, diff.frac := diff.rel / HyADS]
+
+## -------------------------------------------------------------------- ##
+# monthly
+month.changes_scrubs <- rbind( month.changes.0809.dt,
+                               data.table( year_month = '2005_01', ZIP = 40023, diff.type = 'emiss'),
+                               fill = T)
+month.changes_scrubs[, `:=` ( year = gsub( '_.*', '', year_month),
+                              month = gsub( '.*_', '', year_month))]
+month.changes_scrubs <- merge( month.changes_scrubs, 
+                               month.changes.0809[ yearmonth_emiss == '2005_01' & yearmonth_hyspd == '2005_01', 
+                                                   .(ZIP, hyspdisp)], 
+                               by = c( 'ZIP'), all.x = T, all.y = F)
+month.changes_scrubs[, `:=` ( frac = diff.rel / hyspdisp)]
+
+## -------------------------------------------------------------------- ##
+# quarter
+quarter.changes.lville.dt.p <- rbind( quarter.changes.lville.dt,
+                                      data.table( year_month = '2012.1', ZIP = 40023),
+                                      fill = T)
+quarter.changes.lville.dt.p[, `:=` ( year = gsub( '\\..*', '', year_month), 
+                                     quarter = gsub( '.*\\.', '', year_month))]
+quarter.changes.lville.dt.p <- merge( quarter.changes.lville.dt.p, 
+                                      quarter.timeseries.lville.zip.2012[, .(ZIP, HyADS2012.1)], by = c( 'ZIP'),
+                                      keep = 'all')
+quarter.changes.lville.dt.p[, frac := diff.rel / HyADS2012.1]
+
+## -------------------------------------------------------------------- ##
+## define base box ggplot theme
+boxbase.gg <- ggplot( ) +
+  geom_hline( yintercept = 0) +
+  geom_hline( yintercept = 1,  lty = 2, size = .2) +
+  geom_hline( yintercept = -1, lty = 2, size = .2) +
+  scale_fill_brewer( palette = 'Set2',
+                     breaks = c( 'emiss', 'met', 'tot'),
+                     labels = c( expression( ""[p]*"∆"*Exp[emiss]), 
+                                 expression( ""[p]*'∆'*Exp[met]), 
+                                 expression( ""[p]*'∆'*Exp[tot]))) +
+  labs( y = expression( ""[p]*"∆"*Exp)) +
+  theme_bw() + 
+  theme( axis.text = element_text( size = 16),
+         axis.ticks.x = element_blank(),
+         axis.title = element_text( size = 20),
+         axis.title.x = element_blank(),
+         legend.key.size = unit( .9, 'cm'),
+         legend.text = element_text( size = 18, hjust = 0),
+         legend.title = element_blank(),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 26, face = 'bold'))
+
+## annual boxplot
+annualbox.gg <- boxbase.gg + 
+  geom_boxplot( data = annual.changes.all.sf,
+                aes( x = diff.type,
+                     y = diff.frac,
+                     fill = diff.type),
+                outlier.shape = NA, size = .5) +
+  facet_wrap( . ~ year_month, nrow = 1) +
+  scale_y_continuous( breaks = -10:10, labels = percent_format( accuracy = 1)) + 
+  coord_cartesian( ylim = c( -1.5, .75))  + 
+  theme( axis.text.x = element_blank())
+
+## monthly boxplot
+monthbox.gg <- boxbase.gg +
+  geom_boxplot( data = month.changes_scrubs,
+                aes( x = month,
+                     y = frac,
+                     fill = diff.type),
+                outlier.shape = NA, size = .5) +
+  facet_wrap( . ~ year, nrow = 1) +
+  coord_cartesian( ylim = c( -6, 5.5)) +
+  scale_y_continuous( breaks = seq( -11, 11, 2), labels = percent_format( accuracy = 1))   + 
+  theme( panel.grid.major.x = element_line( size = 8))
+
+## quarterly boxplot
+quarterbox.gg <- boxbase.gg +
+  geom_boxplot( data = quarter.changes.lville.dt.p,
+                aes( x = quarter,
+                     y = frac,
+                     fill = diff.type),
+                outlier.shape = NA, size = .5) +
+  facet_wrap( ~ year, nrow = 1) +
+  coord_cartesian( ylim = c( -3, 3)) +
+  scale_y_continuous( breaks = -10:10, labels = percent_format( accuracy = 1))   + 
+  theme( panel.grid.major.x = element_line( size = 15))
+
+## -------------------------------------------------------------------- ##
+##      Annual scatterplots changing emiss/met/tot                      ##
+## -------------------------------------------------------------------- ##
+## cast annual data for scatter-plotting
+annual.changes.all.dt.plot <- dcast.data.table( annual.changes.all.sf,
+                                                ZIP + year_month ~ diff.type,
+                                                value.var = 'diff.frac')
+
+## create quadrant labels object
+q.labs <- c( 'a' = paste0( 'a{M','\u2191\u2191', 'E','\u2193}'),
+             'b' = paste0( 'b{M','\u2191\u2191', 'E','\u2191}'),
+             'c' = paste0( 'c{M','\u2191', 'E','\u2191\u2191}'),
+             'd' = paste0( 'd{M','\u2193', 'E','\u2191\u2191}'),
+             'e' = paste0( 'e{M','\u2193\u2193', 'E','\u2191}'),
+             'f' = paste0( 'f{M','\u2193\u2193', 'E','\u2193}'),
+             'g' = paste0( 'g{M','\u2193', 'E','\u2193\u2193}'),
+             'h' = paste0( 'h{M','\u2191', 'E','\u2193\u2193}'))
+quadrant.labs <- data.table( labs = q.labs, 
+                             octant = letters[1:8],
+                             x.s = c(-0.40, 0.40, 1.45,  1.45,  0.40, -0.40, -1.45, -1.45),
+                             y.s = c( 1.60, 1.60, 0.20, -0.20, -1.60, -1.60, -0.20,  0.20))
+
+# create color scale
+colfunco <- colorRampPalette( c('moccasin', 'tomato4')) #lightgoldenrodyellowc("", "darkorange3")) 
+colfuncb <- colorRampPalette(c("lightblue", "midnightblue" )) #darkblue")) lightcyan
+colos <- c( colfunco(4), rev( colfuncb(4)))
+names(colos) <- names( q.labs)
+
+## -------------------------------------------------------------------- ##
+# make the plot
+g_scat.annual.met.emiss <- ggplot( annual.changes.all.dt.plot) + 
+  facet_wrap( . ~ year_month, nrow = 1) +
+  geom_label( data = quadrant.labs,
+              size = 5, color = 'black',
+              aes( x = x.s, y = y.s, label = labs, fill = octant),
+              inherit.aes = F, show.legend = F) +
+  scale_fill_manual( values = colos) +
+  new_scale_fill() +
+  geom_hex( aes( x = emiss, y = met),
+            binwidth = c( .1, .1), color = NA, size = 0, inherit.aes = F) + 
+  scale_fill_viridis( name= '# ZIP codes',
+                      limits = c( 0, 2000), oob = squish) +
+  geom_abline( slope = 1,  intercept = 0, size = .4) +
+  geom_abline( slope = -1, intercept = 0, size = .4) +
+  geom_hline( yintercept = 0, size = .8) +
+  geom_vline( xintercept = 0, size = .8) +
+  coord_cartesian( xlim = c( -1.65, 1.65), 
+                   ylim = c( -1.65, 1.65)) +
+  scale_y_continuous( labels = percent_format( accuracy = 1)) + 
+  scale_x_continuous( labels = percent_format( accuracy = 1)) + 
+  labs( x = expression( ""[p]*"∆"*Exp[emiss]), 
+        y = expression( ""[p]*'∆'*Exp[met])) +
+  theme_bw() + 
+  theme( axis.text = element_text( size = 16),
+         axis.title = element_text( size = 20),
+         legend.text = element_text(size = 18, hjust = .5), 
+         legend.title = element_text(size = 18, face = 'bold'), 
+         strip.background = element_blank(),
+         strip.text = element_text( size = 26, face = 'bold'))
+
+
+
+## -------------------------------------------------------------------- ##
+##      Different met/emiss influence regimes - annual spatial plots    ##
+## -------------------------------------------------------------------- ##
+# cast, calculate fraction of impacts
+annual.changes.all.dt.c <- dcast.data.table( annual.changes.all.dt,
+                                             ZIP + year_month ~ diff.type,
+                                             value.var = 'diff.rel')[, `:=` ( frac.met = met / tot,
+                                                                              frac.emiss = emiss / tot)]
+month.changes.0809.dt.c <- dcast.data.table( month.changes.0809.dt,
+                                             ZIP + year_month ~ diff.type,
+                                             value.var = 'diff.rel')[, `:=` ( frac.met = met / tot,
+                                                                              frac.emiss = emiss / tot)]
+quarter.changes.lville.dt.c <- dcast.data.table( quarter.changes.lville.dt,
+                                                 ZIP + year_month ~ diff.type,
+                                                 value.var = 'diff.rel')[, `:=` ( frac.met = met / tot,
+                                                                                  frac.emiss = emiss / tot)]
+
+# identify regimes, remove missing values
+annual.changes.all.dt.oct <- na.omit( octanter( annual.changes.all.dt.c))
+month.changes.0809.dt.oct <- na.omit( octanter( month.changes.0809.dt.c))
+quarter.changes.lville.dt.oct <- na.omit( octanter( quarter.changes.lville.dt.c))
+
+# merge with spatial data 
+spatial.plot.annual.dt <- merge( annual.changes.all.dt.oct, zips, by = 'ZIP')
+spatial.plot.monthly.dt <- merge( month.changes.0809.dt.oct, zips, by = 'ZIP')
+spatial.plot.quarter.dt <- merge( quarter.changes.lville.dt.oct, zips, by = 'ZIP')
+
+## get area of each ZIP code
+spatial.plot.annual.dt[ , area.m2 := st_area( geometry)]
+spatial.plot.monthly.dt[ , area.m2 := st_area( geometry)]
+spatial.plot.quarter.dt[ , area.m2 := st_area( geometry)]
+
+# limit to lower 48 states
+spatial.plot.dt.us <- spatial.plot.annual.dt[STATE %in% state.abb & STATE %ni% c( 'AK', 'HI')]
+spatial.plot.monthly.dt.us <- spatial.plot.monthly.dt[STATE %in% state.abb & STATE %ni% c( 'AK', 'HI')]
+
+# sum area by period
+spatial.plot.dt.us[ , area.tot := sum( area.m2), by = year_month]
+spatial.plot.monthly.dt.us[ , area.tot := sum( area.m2), by = year_month]
+spatial.plot.quarter.dt[ , area.tot := sum( area.m2), by = year_month]
+
+# take fractions of coverage for each regime
+spatial.area.monthly.plot <- spatial.plot.monthly.dt.us[ , as( sum( area.m2 / area.tot), 'numeric'), 
+                                                         by = .( year_month, o.name, octant)]
+spatial.area.quarter.plot <- spatial.plot.quarter.dt[ , as( sum( area.m2 / area.tot), 'numeric'), 
+                                                      by = .( year_month, o.name, octant)]
+
+# format for plotting
+spatial.area.monthly.plot[, `:=` ( year = gsub( '_.*', '', year_month),
+                                   month = gsub( '.*_', '', year_month))]
+spatial.area.monthly.plot <- rbind( data.table( year = 2012, month = '01', octant = 'a'),
+                                    spatial.area.monthly.plot, fill = T)
+spatial.area.quarter.plot[, `:=` ( year = gsub( '\\..*', '', year_month),
+                                   quart = gsub( '.*\\.', '', year_month),
+                                   octant = factor( octant, levels = letters[1:8]))]
+spatial.area.quarter.plot <- rbind( data.table( year = 2012, quart = 1),
+                                    spatial.area.quarter.plot, fill = T)
+
+
+## -------------------------------------------------------------------- ##
+## make the annual spatial plot
+## warning: this plot takes a while (~30 min) to render ##
+annual_regime.gg <- ggplot( ) + 
+  facet_wrap( . ~ year_month, nrow = 1) +
+  geom_polygon(
+    data = map_data("state"),
+    aes(x = long, y = lat, group = group),
+    fill = "white",
+    colour = "white",
+    size = .25
+  ) +
+  geom_sf( data = spatial.plot.dt.us, 
+           aes( fill = octant, geometry = geometry), #o.name
+           color = NA) + 
+  theme_bw() + 
+  geom_polygon(
+    data = map_data("state"),
+    aes(x = long, y = lat, group = group),
+    fill = NA,
+    colour = "grey50",
+    size = .1
+  ) +
+  coord_sf(
+    xlim = c(-123, -69),
+    ylim = c(24, 50)
+  ) +
+  scale_fill_manual( values = colos,
+                     labels = q.labs,
+                     name = 'Regime') + 
+  guides( fill = guide_legend( title.position = 'top', ncol = 1)) +
+  theme( axis.title = element_text(size = 24),
+         axis.text = element_blank(),
+         axis.ticks = element_blank(),
+         axis.title.x = element_blank(),
+         axis.title.y = element_blank(),
+         legend.title.align = 0,
+         legend.text = element_text(size = 18, hjust = .5), 
+         legend.title = element_text(size = 18, face = 'bold'), 
+         legend.background = element_rect(fill = 'transparent'),
+         legend.direction = 'horizontal',
+         plot.title = element_text(size = 16, hjust = 0.5),
+         panel.grid = element_blank(),
+         rect = element_rect( color = 'white'),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 26, face = 'bold')
+  )
+
+
+# plot octant time series by quarter
+month_regime.gg <- ggplot( data = spatial.area.monthly.plot,
+                           aes( y = V1,
+                                x = month,
+                                fill = octant)) + 
+  facet_wrap( . ~ year, nrow = 1) +
+  geom_col() + 
+  labs( y = 'Regime coverage') +
+  scale_fill_manual( values = colos,
+                     labels = q.labs,
+                     name = 'Regime') + 
+  # scale_fill_brewer( name = 'Regime', palette = 'Accent') +
+  scale_y_continuous( labels = percent_format( accuracy = 1)) +
+  theme_bw() +
+  theme( axis.text = element_text(size = 16),
+         axis.text.x = element_text(size = 14),
+         axis.title = element_text(size = 20),
+         axis.title.x = element_blank(),
+         legend.background = element_rect(fill = 'transparent'),
+         legend.key.size = unit( .9, 'cm'),
+         legend.title = element_text(size = 20, face = 'bold'), 
+         legend.title.align = 0,
+         legend.text = element_text(size = 18,
+                                    hjust = .5), 
+         rect = element_rect( color = 'white'),
+         strip.background = element_blank(),
+         strip.text = element_blank()#, #element_text( size = 16),
+  )
+
+# plot octant time series by month
+quarter_regime.gg <- ggplot( data = spatial.area.quarter.plot,
+                             aes( y = V1,
+                                  x = quart,
+                                  fill = octant)) + 
+  facet_wrap( . ~ year, nrow = 1) +
+  geom_col() + 
+  labs( y = 'Regime coverage') +
+  scale_fill_manual( values = colos,
+                     labels = q.labs,
+                     name = 'Regime',
+                     drop = F) + 
+  # scale_fill_brewer( name = 'Regime', palette = 'Accent', drop = F) +
+  scale_y_continuous( labels = percent_format( accuracy = 1)) + 
+  theme_bw() +
+  theme( axis.text = element_text(size = 16),
+         axis.title = element_text(size = 20),
+         axis.title.x = element_blank(),
+         legend.background = element_rect(fill = 'transparent'),
+         legend.key.size = unit( .9, 'cm'),
+         legend.title = element_text(size = 20, face = 'bold'), 
+         legend.title.align = 0,
+         legend.text = element_text(size = 18,
+                                    hjust = .5), 
+         rect = element_rect( color = 'white'),
+         strip.background = element_blank(),
+         strip.text = element_blank()#, #element_text( size = 16),
+  )
+
+
+
+
+
+## -------------------------------------------------------------------- ##
+##      Combined plots for manuscript                                   ##
+## -------------------------------------------------------------------- ##
+## Figure 3
+gg_combine.annual <- plot_grid(g_scat.annual.met.emiss, 
+                               annual_regime.gg + theme( strip.text = element_blank()),
+                               rel_heights = c( 1, .5),
+                               labels = NULL, ncol = 1, 
+                               align = 'v', axis = 'lr') 
+# saving this file takes ~30 minutes
+ggsave(  filename = paste0( file.path( direct.dat, '..', 'plots', 'Figure3.png')),
+         gg_combine.annual,    
+         width = 70*.65, 
+         height = 30*.65,
+         unit = 'cm')
+
+## -------------------------------------------------------------------- ##
+## Figure 4
+gg_combine.monthly <- plot_grid(monthbox.gg + theme( axis.text.x = element_blank()), 
+                                month_regime.gg,
+                                labels = NULL, ncol = 1, 
+                                align = 'v', axis = 'lr') 
+
+ggsave(  filename = paste0( file.path( direct.dat, '..', 'plots', 'Figure4.png')),
+         gg_combine.monthly,    
+         width = 40 * 1.1,
+         height = 17 * 1.1,
+         unit = 'cm')
+
+## -------------------------------------------------------------------- ##
+## Figure 5
+gg_combine.quarter <- plot_grid(quarterbox.gg + theme( axis.text.x = element_blank()), 
+                                quarter_regime.gg,
+                                labels = NULL, ncol = 1, 
+                                align = 'v', axis = 'lr') 
+
+ggsave(  filename = paste0( file.path( direct.dat, '..', 'plots', 'Figure5.png')),
+         gg_combine.quarter,    
+         width = 40 * 1.1,
+         height = 17 * 1.1,
+         unit = 'cm')
+
+
+
+
+

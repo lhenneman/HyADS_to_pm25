@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1568814437721.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3390037810",
+    "id" : "AB0E251E",
+    "lastKnownWriteTime" : 1568755110,
+    "last_content_update" : 1568755110,
+    "path" : "~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/cmaqddm_to_pm25.Rmd",
+    "project_path" : "cmaqddm_to_pm25.Rmd",
+    "properties" : {
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
