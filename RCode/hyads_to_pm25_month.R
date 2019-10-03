@@ -16,8 +16,10 @@ layer.names <- c( "air.2m.mon.mean.nc",
 names( layer.names) <- c( "temp", "apcp", "rhum", "vwnd", "uwnd")
 
 # do the data downloading
+# set destination parameter to where you want the data downloaded,
+# for example, destination = '~/Desktop'
 list.met <- lapply( layer.names,
-                    downloader.fn,
+                    downloader.fn, #destination = '~/Desktop'
                     dataset = 'NARR')
 
 # take over US
