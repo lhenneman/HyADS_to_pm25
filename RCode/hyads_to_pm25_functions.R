@@ -77,7 +77,7 @@ ddm_to_zip <- function( ddm_coal_file,
 #======================================================================#
 downloader.fn <- function( filename,
                            destination = file.path('~', 'Dropbox', 'Harvard', 'RFMeval_Local', 
-                                                   'Comparisons_Intermodel', 'Global_meteorology')
+                                                   'Comparisons_Intermodel', 'Global_meteorology'),
                            dataset = c( '20thC_ReanV2c', 'ncep.reanalysis.derived', 'NARR')){
   if( length( dataset) > 1)
     dataset <- dataset[1]

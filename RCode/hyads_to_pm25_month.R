@@ -1,3 +1,5 @@
+rm( list = ls())
+
 source( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
 
 #coordinate reference system projection string for spatial data
@@ -25,9 +27,10 @@ list.met <- lapply( layer.names,
 # take over US
 mets2005.m <- usa.functioner( 2005, list.met, dataset = 'NARR', avg.period = 'month', return.usa.sub = F)
 mets2006.m <- usa.functioner( 2006, list.met, dataset = 'NARR', avg.period = 'month', return.usa.sub = F)
+mets2011.m <- usa.functioner( 2011, list.met, dataset = 'NARR', avg.period = 'month', return.usa.sub = F)
 
 # combine into single list
-mets.m.all <- append( mets2005.m, mets2006.m)
+mets.m.all <- append( append( mets2005.m, mets2006.m), mets2011.m)
 
 #======================================================================#
 ## Load ddm as month
@@ -49,27 +52,29 @@ ddm.m.all <- stack( ddm2005.m, ddm2006.m)
 # read monthly grid files
 hyads2005.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_month_2005.csv', drop = 'V1')
 hyads2006.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_month_2006.csv', drop = 'V1')
+hyads2011.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2011grid/HyADS_grid_month_2011.csv', drop = 'V1')
 
 # create lists from monthly grid objects
 hyads2005.m.l <- split( hyads2005.m.dt, by = 'yearmonth')
 hyads2006.m.l <- split( hyads2005.m.dt, by = 'yearmonth')
+hyads2011.m.l <- split( hyads2011.m.dt, by = 'yearmonth')
 names( hyads2005.m.l) <- names( mets2005.m)
 names( hyads2006.m.l) <- names( mets2006.m)
+names( hyads2011.m.l) <- names( mets2011.m)
 
 # create lists of monthly rasters
-hyads2005.m <- lapply( hyads2005.m.l, 
-                       function( X){
-                         r <- rasterFromXYZ( X[, .( x, y, hyads)], crs = p4s)
-                         r[is.na( r)] <- 0
-                         return( r)})
-hyads2006.m <- lapply( hyads2006.m.l, 
-                       function( X){
-                         r <- rasterFromXYZ( X[, .( x, y, hyads)], crs = p4s)
-                         r[is.na( r)] <- 0
-                         return( r)})
+HyADSrasterizer <- function( X){
+  r <- rasterFromXYZ( X[, .( x, y, hyads)], crs = p4s)
+  r[is.na( r)] <- 0
+  return( r)
+}
+
+hyads2005.m <- lapply( hyads2005.m.l, HyADSrasterizer)
+hyads2006.m <- lapply( hyads2006.m.l, HyADSrasterizer)
+hyads2011.m <- lapply( hyads2011.m.l, HyADSrasterizer)
 
 # combine into single list
-hyads.m.all <- stack( stack( hyads2005.m), stack( hyads2006.m))
+hyads.m.all <- stack( stack( hyads2005.m), stack( hyads2006.m), stack( hyads2011.m))
 
 ## ========================================================= ##
 ##                Read in emissions data
@@ -91,39 +96,66 @@ d_nonegu.sp <- spTransform( d_nonegu.sp, CRS( p4s))
 d_nonegu.r <- rasterize( d_nonegu.sp, ddm.m.all)$d_nonegu.slim...ANN_EMIS.
 d_nonegu.r[is.na(d_nonegu.r[])] <- 0
 
+
+## ========================================================= ##
+##                Source inverse distance weighted raster
+## ========================================================= ##
+idwe.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted.csv', drop = 'V1')
+idwe.m.l <- split( idwe2005.m.dt, by = 'yearmon')
+
+# create lists of monthly rasters
+IDWErasterizer <- function( X){
+  r <- rasterFromXYZ( X[, .( x, y, tot.sum)], crs = p4s)
+  r[is.na( r)] <- 0
+  return( r)
+}
+
+idwe.m <- stack( lapply( idwe.m.l, IDWErasterizer))
+names( idwe.m) <- names( hyads.m.all)
+
+## ========================================================= ##
+##                Plots
+## ========================================================= ##
+plot( hyads.m.all$X2005.01.01)
+plot( idwe.m$X2005.01.01)
+plot( ddm.m.all$X2005.01.01)
+
+
 #======================================================================#
 ## Combine into raster stack, train model
 #======================================================================#
 month.trainer <- function( name.m = names( mets2005.m)[1], 
                            name.p = names( mets2006.m)[1], 
+                           name.x,
+                           y.m, 
                            ddm.m = ddm.m.all, 
-                           hyads.m = hyads.m.all, 
                            mets.m = mets.m.all,
                            emiss.m = d_nonegu.r,
-                           cov.names = c( "temp", "rhum", "vwnd", "uwnd", "wspd", names( d_nonegu.r))){
+                           cov.names = c( "temp", "rhum", "vwnd", "uwnd", "wspd")){ #, names( d_nonegu.r))){
+  
   # create training dataset
   ddm.use <- ddm.m[[name.m]]
-  hyads.use <- projectRaster( hyads.m[[name.m]], ddm.use)
+  hyads.use <- projectRaster( y.m[[name.m]], ddm.use)
   mets.use <- projectRaster( mets.m[[name.m]], ddm.use)
   emiss.use <- projectRaster( emiss.m, ddm.use)
   
   # create prediction dataset
   ddm.use.p <- ddm.m[[name.p]]
-  hyads.use.p <- projectRaster( hyads.m[[name.p]], ddm.use.p)
+  hyads.use.p <- projectRaster( y.m[[name.p]], ddm.use.p)
   mets.use.p <- projectRaster( mets.m[[name.p]], ddm.use.p)
   
   # fix names
   names( ddm.use)     <- 'cmaq.ddm'
   names( ddm.use.p)   <- 'cmaq.ddm'
-  names( hyads.use)   <- 'hyads'
-  names( hyads.use.p) <- 'hyads'
+  names( hyads.use)   <- name.x
+  names( hyads.use.p) <- name.x
   
   # combine each dataset as stacks
   dat.s <- stack( ddm.use,   hyads.use,   mets.use,   emiss.use)
   dat.p <- stack( ddm.use.p, hyads.use.p, mets.use.p, emiss.use)
   
   # do the modeling
-  pred <- lm.hyads.ddm.holdout( dat.stack = dat.s, dat.stack.pred = dat.p,
+  pred <- lm.hyads.ddm.holdout( dat.stack = dat.s, dat.stack.pred = dat.p, x.name = name.x,
                                 ho.frac = 0, covars.names = cov.names, return.mods = T)
   
   return( pred)
@@ -131,7 +163,10 @@ month.trainer <- function( name.m = names( mets2005.m)[1],
 
 
 # predict each month in 2006 using model trained in 2005
-preds.mon <- mapply( month.trainer, names( mets2005.m), names( mets2006.m))
+preds.mon.hyads <- mapply( month.trainer, names( mets2005.m), names( mets2006.m),
+                           MoreArgs = list( name.x = 'hyads', y.m = hyads.m.all))
+preds.mon.idwe  <- mapply( month.trainer, names( mets2005.m), names( mets2006.m),
+                           MoreArgs = list( name.x = 'idwe',  y.m = idwe.m))
 
 #======================================================================#
 ## Extract data, summarize, and plot
@@ -146,21 +181,40 @@ preds.mon <- mapply( month.trainer, names( mets2005.m), names( mets2006.m))
 mask.usa <- usa.functioner( list.met = list.met, return.usa.mask = T)
 mask.usa <- spTransform( mask.usa, CRSobj = crs( p4s))
 
-plot( preds.mon['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv)
+ggplot.a.raster( subset( ddm.m.all, 'X2006.01.01'),
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
+                 mask.raster = mask.usa, facet.names = c( 'CMAQ', 'HyADS', 'IDWE'),
+                 bounds = c( 0,2), ncol. = 1)
 
 # plots of monthly predictions
-ggplot.a.raster( preds.mon['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.02.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.03.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.04.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.05.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.06.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.07.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.08.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.09.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.10.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.11.01'][[1]]$y.hat.lm.cv,
-                 preds.mon['Y.ho.hat.raster','X2005.12.01'][[1]]$y.hat.lm.cv,
+ggplot.a.raster( preds.mon.hyads['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.02.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.03.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.04.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.05.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.06.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.07.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.08.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.09.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.10.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.11.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.hyads['Y.ho.hat.raster','X2005.12.01'][[1]]$y.hat.lm.cv,
+                 bounds = c( 0,6), ncol. = 3, facet.names = month.name,
+                 mask.raster = mask.usa)
+
+ggplot.a.raster( preds.mon.idwe['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.02.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.03.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.04.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.05.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.06.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.07.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.08.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.09.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.10.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.11.01'][[1]]$y.hat.lm.cv,
+                 preds.mon.idwe['Y.ho.hat.raster','X2005.12.01'][[1]]$y.hat.lm.cv,
                  bounds = c( 0,6), ncol. = 3, facet.names = month.name,
                  mask.raster = mask.usa)
 
@@ -190,17 +244,25 @@ ggplot.a.raster( preds.mon['Y.ho.terms.raster','X2005.07.01'][[1]],
 
 
 ## extract evaluation statistics
-preds.metrics <- preds.mon[ 'metrics',]
+preds.metrics.hyads <- preds.mon.hyads[ 'metrics',]
+preds.metrics.idwe  <- preds.mon.idwe[ 'metrics',]
 
-metrics <- data.table( month = as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics)))),
-                       'R^2' = sapply( preds.metrics, function( dt) dt[ mod.name == 'lm.cv']$R^2),
-                       NMB = sapply( preds.metrics, function( dt) dt[ mod.name == 'lm.cv']$NMB),
-                       NME = sapply( preds.metrics, function( dt) dt[ mod.name == 'lm.cv']$NME),
-                       RMSE = sapply( preds.metrics, function( dt) dt[ mod.name == 'lm.cv']$RMSE))
-metrics.m <- melt( metrics, id.vars = 'month', variable.name = 'metric')
+metrics <- data.table( month = c( as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.hyads)))),
+                                  as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.idwe))))),
+                       model = c( rep( 'hyads', length( names( preds.metrics.hyads))),
+                                  rep( 'idwe', length( names( preds.metrics.idwe)))),
+                       'R^2' = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$R^2),
+                                  sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$R^2)),
+                       NMB = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$NMB),
+                                sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$NMB)),
+                       NME = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$NME),
+                                sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$NME)),
+                       RMSE = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$RMSE),
+                                 sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$RMSE)))
+metrics.m <- melt( metrics, id.vars = c( 'model', 'month'), variable.name = 'metric')
 
 ggplot( data = metrics.m,
-        aes( x = month, y = value, group = metric)) + 
+        aes( x = month, y = value, group = model, color = model)) + 
   geom_line() + geom_point() + 
   facet_wrap( . ~ metric, scales = 'free_y', ncol = 1, labeller = label_parsed) + 
   expand_limits( y = 0)
