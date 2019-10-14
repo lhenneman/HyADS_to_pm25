@@ -4,6 +4,7 @@ library( spBayes)
 library( hyspdisp)
 library( ggplot2)
 library( viridis)
+library( lubridate)
 
 `%ni%` <- Negate(`%in%`) 
 
@@ -384,14 +385,16 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                                   dat.stack.pred = NULL,
                                   y.name = 'cmaq.ddm',
                                   x.name = 'hyads',
+                                  name.idwe = 'tot.sum',
                                   covars.names = NULL, #c( 'temp', 'apcp'),
                                   ho.frac = .1,
                                   return.mods = F,
                                   ...){
+  set.seed( seed.n)
+  
+  # if no covar names provided, use all covariates that aren't x or y
   if( is.null( covars.names))
     covars.names <- names( dat.stack)[names( dat.stack) %ni% c( x.name, y.name)]
-  
-  set.seed( seed.n)
   
   # define holdout parameters
   N <- ncell( dat.stack)
@@ -477,7 +480,8 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                            NME = abs.diff / denom,
                            MB   = num.diff / length( Yhat),
                            RMSE = sqrt( sum( ( Yhat - Yact) ^ 2, na.rm = T) / length( Yhat)),
-                           R = cor( Yhat, Yact, use = 'complete.obs'))
+                           R = cor( Yhat, Yact, use = 'complete.obs'),
+                           R.s = cor( Yhat, Yact, use = 'complete.obs', method = 'spearman'))
     return( metrics)
   }
   metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.cv, y.ho, 'lm.cv'),
@@ -485,8 +489,23 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                         eval.fn( Y.ho.hat$y.hat.mean, y.ho, 'adj.mean'),
                         eval.fn( Y.ho.hat$y.hat.Z, y.ho, 'adj.Z'))
   
+  # calculate correlations along quantiles of idwe
+  evals.q <- data.table()
+  if( ho.frac == 0){
+    vals.idwe <- unlist( data.table( values( dat.stack))[, ..name.idwe])
+    vals.eval <- data.table( values( Y.ho.hat.raster))
+    for ( s in seq( 0.01, 1, .01)){
+      q <- quantile( vals.idwe, s, na.rm = T)
+      vals.use <- vals.eval[vals.idwe < q,]
+      evals <- eval.fn( vals.use$y.hat.lm.cv, vals.use$y.ho, x.name)[, s := s]
+      evals.q <- rbind( evals.q, evals)
+    }
+  }
+  
+  # listify the models
   if( return.mods)
     out <- list( metrics = metrics.out, 
+                 evals.q = evals.q,
                  model.cv = lm.cv,
                  model.ncv = lm.ncv,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
@@ -495,6 +514,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  Y.ho.terms.raster = Y.ho.terms.raster)
   if( !return.mods)
     out <- list( metrics = metrics.out, 
+                 evals.q = evals.q,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
@@ -566,4 +586,70 @@ ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL,
            strip.background = element_blank())
 }
 
+#======================================================================#
+# do the predictions for many months
+#======================================================================#
+month.trainer <- function( name.m = names( mets2005.m)[1], 
+                           name.p = names( mets2006.m)[1], 
+                           name.x,
+                           y.m, 
+                           ddm.m = ddm.m.all, 
+                           mets.m = mets.m.all,
+                           emiss.m = d_nonegu.r,
+                           idwe.m = idwe.m,
+                           .mask.use = NULL,
+                           cov.names = c( "temp", "rhum", "vwnd", "uwnd", "wspd")){ #, names( d_nonegu.r))){
+  
+  # create training dataset
+  ddm.use <- ddm.m[[name.m]]
+  hyads.use <- y.m[[name.m]]
+  mets.use <- mets.m[[name.m]]
+  emiss.use <- emiss.m
+  idwe.use <- idwe.m[[name.m]]
+  
+  # create prediction dataset
+  ddm.use.p <- ddm.m[[name.p]]
+  hyads.use.p <- y.m[[name.p]]
+  mets.use.p <- mets.m[[name.p]]
+  idwe.use.p <- idwe.m[[name.p]]
+  
+  # fix names
+  names( ddm.use)     <- 'cmaq.ddm'
+  names( ddm.use.p)   <- 'cmaq.ddm'
+  names( hyads.use)   <- name.x
+  names( hyads.use.p) <- name.x
+  names( idwe.use)   <- 'tot.sum.idwe'
+  names( idwe.use.p) <- 'tot.sum.idwe'
+  
+  # combine each dataset as stacks
+  dat.s <- project_and_stack( ddm.use,   hyads.use,   idwe.use,   
+                              mets.use, emiss.use, mask.use = .mask.use)
+  dat.p <- project_and_stack( ddm.use.p, hyads.use.p, idwe.use.p, 
+                              mets.use.p, emiss.use, mask.use = .mask.use)
+  
+  # do the modeling
+  pred <- lm.hyads.ddm.holdout( dat.stack = dat.s, dat.stack.pred = dat.p, x.name = name.x,
+                                ho.frac = 0, covars.names = cov.names, 
+                                name.idwe = 'tot.sum.idwe', return.mods = T)
+  
+  return( pred)
+}
 
+
+#======================================================================#
+# project and stack in one command
+#======================================================================#
+project_and_stack <- function( ..., mask.use = NULL){
+  list.r <- list( ...)
+  for( r in 2: length( list.r)){
+    list.r[[r]] <- projectRaster( list.r[[r]], list.r[[1]])
+  }
+  
+  # mask over usa
+  if( !is.null( mask.use)){
+    list.out <- lapply( list.r, mask, mask.use)
+  } else
+    list.out <- list.r
+  
+  return( stack( list.out))
+}
