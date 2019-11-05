@@ -446,7 +446,9 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   y.hat.lm.cv  <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.ncv <- predict( lm.ncv, newdata = dat.stack.ho, se.fit = T)
   y.hat.mean <- unlist( dat.stack.ho[,..x.name] * mean.y.over.x)
-  y.hat.Z <-    unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x * sd.y + mean.y)
+  y.hat.Z <- unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x * sd.y + mean.y)
+  x.rscale.Z <-    unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x)
+  y.rscale.Z <-    unlist( (dat.stack.ho[,..y.name] - mean.y) / sd.y)
   
   # calculate covariate contributions
   Y.ho.terms <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
@@ -462,6 +464,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                                y.hat.Z = y.hat.Z - y.ho)
   Y.ho.hat.se <- data.table( dat.coords.ho, y.hat.lm.cv = y.hat.lm.cv$se.fit, 
                              y.hat.lm.ncv = y.hat.lm.ncv$se.fit)
+  rscale.Z <- data.table( dat.coords.ho, x.rscale.Z, y.rscale.Z)
   
   # rasterize output for plots
   crs.in <- crs( dat.stack)
@@ -469,6 +472,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   Y.ho.terms.raster <- projectRaster( rasterFromXYZ( Y.ho.terms.dt, crs = crs.in), dat.stack)
   Y.ho.hat.se.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.se, crs = crs.in), dat.stack)
   Y.ho.hat.bias.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.bias, crs = crs.in), dat.stack)
+  rscale.Z.raster <- projectRaster( rasterFromXYZ( rscale.Z, crs = crs.in), dat.stack)
   
   # calculate evaluation metrics
   eval.fn <- function( Yhat, Yact, mod.name){
@@ -487,10 +491,12 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.cv, y.ho, 'lm.cv'),
                         eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
                         eval.fn( Y.ho.hat$y.hat.mean, y.ho, 'adj.mean'),
-                        eval.fn( Y.ho.hat$y.hat.Z, y.ho, 'adj.Z'))
+                        eval.fn( Y.ho.hat$y.hat.Z, y.ho, 'adj.Z'),
+                        eval.fn( y.rscale.Z, x.rscale.Z, 'adj.Z.only'))
   
   # calculate correlations along quantiles of idwe
   evals.q <- data.table()
+  evals.qq <- data.table()
   if( ho.frac == 0){
     vals.idwe <- unlist( data.table( values( dat.stack))[, ..name.idwe])
     vals.eval <- data.table( values( Y.ho.hat.raster))
@@ -500,12 +506,20 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
       evals <- eval.fn( vals.use$y.hat.lm.cv, vals.use$y.ho, x.name)[, s := s]
       evals.q <- rbind( evals.q, evals)
     }
+    for ( s in seq( 0.05, 1, .05)){
+      q <- quantile( vals.idwe, s, na.rm = T)
+      qq <- quantile( vals.idwe, s - .05, na.rm = T)
+      vals.use <- vals.eval[vals.idwe < q & vals.idwe > qq,]
+      evals <- eval.fn( vals.use$y.hat.lm.cv, vals.use$y.ho, x.name)[, s := s]
+      evals.qq <- rbind( evals.qq, evals)
+    }
   }
   
   # listify the models
   if( return.mods)
     out <- list( metrics = metrics.out, 
                  evals.q = evals.q,
+                 evals.qq = evals.qq,
                  model.cv = lm.cv,
                  model.ncv = lm.ncv,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
@@ -515,6 +529,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   if( !return.mods)
     out <- list( metrics = metrics.out, 
                  evals.q = evals.q,
+                 evals.qq = evals.qq,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,

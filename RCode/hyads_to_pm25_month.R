@@ -242,6 +242,17 @@ preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 
 #======================================================================#
+## Save data
+#======================================================================#
+# annual stacks, 
+# monthly stacks
+# annual model
+# monthly models
+save.list <- c( dats2005.a, )
+
+# do correlation comparisons on quintiles
+# scale all 3 on their Z score scale
+#======================================================================#
 ## Extract data, summarize, and plot
 #======================================================================#
 ## things we should show by month
@@ -251,11 +262,14 @@ preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.
 # plot contributions of inputs
 
 
-ggplot.a.raster( subset( ddm.m.all, 'X2006.01.01'),
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.idwe['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
-                 mask.raster = mask.usa, facet.names = c( 'CMAQ', 'HyADS', 'IDWE'),
-                 bounds = c( 0,2), ncol. = 1)
+gg_out <- ggplot.a.raster( subset( ddm.m.all, 'X2005.07.01'),
+                           preds.mon.hyads05w06 ['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.lm.cv,
+                           preds.mon.idwe05w06 ['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.lm.cv,
+                           mask.raster = mask.usa, facet.names = c( 'CMAQ', 'HyADS', 'IDWE'),
+                           bounds = c( 0,8), ncol. = 1)
+
+ggsave( '~/Dropbox/Harvard/Meetings_and_People/CMAS_2019/HyADS_pred_model_July.png', gg_out,
+        height = 8, width = 3.5, scale = .7)
 
 # plots of monthly predictions
 ggplot.a.raster( preds.mon.hyads['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
@@ -317,8 +331,8 @@ ggplot.a.raster( preds.mon['Y.ho.terms.raster','X2005.07.01'][[1]],
 ## Plot the metrics
 #======================================================================#
 ## extract evaluation statistics
-preds.metrics.hyads <- preds.mon.hyads[ 'metrics',]
-preds.metrics.idwe  <- preds.mon.idwe[ 'metrics',]
+preds.metrics.hyads <- preds.mon.hyads06w05[ 'metrics',]
+preds.metrics.idwe  <- preds.mon.idwe06w05[ 'metrics',]
 
 metrics <- data.table( month = c( as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.hyads)))),
                                   as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.idwe))))),
@@ -340,6 +354,27 @@ ggplot( data = metrics.m,
   facet_wrap( . ~ metric, scales = 'free_y', ncol = 1, labeller = label_parsed) + 
   expand_limits( y = 0)
 
+# metrics - adj. Z score, no model
+metrics.Z.only <- data.table( month = c( as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.hyads)))),
+                                         as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.idwe))))),
+                              model = c( rep( 'hyads', length( names( preds.metrics.hyads))),
+                                         rep( 'idwe', length( names( preds.metrics.idwe)))),
+                              'R^2' = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'adj.Z.only']$R^2),
+                                         sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'adj.Z.only']$R^2)),
+                              NMB = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'adj.Z.only']$NMB),
+                                       sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'adj.Z.only']$NMB)),
+                              NME = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'adj.Z.only']$NME),
+                                       sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'adj.Z.only']$NME)),
+                              RMSE = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'adj.Z.only']$RMSE),
+                                        sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'adj.Z.only']$RMSE)))
+metrics.Z.only.m <- melt( metrics.Z.only, id.vars = c( 'model', 'month'), variable.name = 'metric')
+
+ggplot( data = metrics.Z.only.m,
+        aes( x = month, y = value, group = model, color = model)) + 
+  geom_line() + geom_point() + 
+  facet_wrap( . ~ metric, scales = 'free_y', ncol = 1, labeller = label_parsed) + 
+  expand_limits( y = 0)
+
 # extract linear model coefficients
 
 #annual comparisons
@@ -349,8 +384,8 @@ ggplot( data = metrics.m,
 ## Plot changes in evaluation in different areas
 #======================================================================#
 
-cors.keep.month.hyads <- rbindlist( preds.mon.hyads['evals.q',], idcol = 'month')
-cors.keep.month.idwe  <- rbindlist( preds.mon.idwe['evals.q',], idcol = 'month')
+cors.keep.month.hyads <- rbindlist( preds.mon.hyads05w06['evals.qq',], idcol = 'month')
+cors.keep.month.idwe  <- rbindlist( preds.mon.idwe05w06['evals.qq',], idcol = 'month')
 cors.keep.month <- rbind( cors.keep.month.hyads, cors.keep.month.idwe)
 cors.keep.m <- melt( cors.keep.month, id.vars = c( 'mod.name', 's', 'month'))
 ggplot( data = cors.keep.m,
