@@ -1,10 +1,11 @@
 library( data.table)
 library( raster)
 library( spBayes)
-library( hyspdisp)
+library( disperseR)
 library( ggplot2)
 library( viridis)
 library( lubridate)
+library( mgcv)
 
 `%ni%` <- Negate(`%in%`) 
 
@@ -416,23 +417,28 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
     dat.coords.tr <- data.table( dat.coords)
     
     # define inputs
-    dat.stack.ho <- data.table( values( dat.stack))
-    dat.stack.tr <- data.table( values( dat.stack))
+    dat.stack.ho <- data.table( dat.coords.ho, values( dat.stack))
+    dat.stack.tr <- data.table( dat.coords.tr, values( dat.stack))
   } 
   if( !is.null( dat.stack.pred)){
     # extract coordinates
     dat.coords.ho <- data.table( coordinates( dat.stack.pred))
     
     # define inputs
-    dat.stack.ho <- data.table( values( dat.stack.pred))
+    dat.stack.ho <- data.table( dat.coords.ho, values( dat.stack.pred))
   } 
   
   # check out linear regression models - define them
   form.cv <-  as.formula( paste( y.name, '~ (', paste( c( x.name, covars.names), 
                                                        collapse = '+'), ') ^2'))
+  ## k = 100 gives a minimum aic
+  form.cv.spl <- as.formula( paste( y.name, '~ (', paste( c( x.name, covars.names), 
+                                                          collapse = '+'), ') ^2', 
+                                    '+s( x, y, k = 100)'))
   form.ncv <- as.formula( paste( y.name, '~', x.name))
   lm.cv <-  lm( form.cv,  data = dat.stack.tr)
   lm.ncv <- lm( form.ncv, data = dat.stack.tr)
+  gam.cv <-  gam( form.cv.spl,  data = dat.stack.tr)
   
   # check out linear regression models - define them
   mean.y.over.x <- mean( unlist( dat.stack.tr[,..y.name]) / unlist( dat.stack.tr[,..x.name]), na.rm = T)
@@ -445,6 +451,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   y.ho <- unlist( dat.stack.ho[,..y.name])
   y.hat.lm.cv  <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.ncv <- predict( lm.ncv, newdata = dat.stack.ho, se.fit = T)
+  y.hat.gam.cv <- predict( gam.cv, newdata = dat.stack.ho, se.fit = T)
   y.hat.mean <- unlist( dat.stack.ho[,..x.name] * mean.y.over.x)
   y.hat.Z <- unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x * sd.y + mean.y)
   x.rscale.Z <-    unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x)
@@ -452,17 +459,20 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   
   # calculate covariate contributions
   Y.ho.terms <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
+  Y.ho.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
   Y.ho.terms.dt <- data.table( dat.coords.ho, Y.ho.terms$fit)
+  Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit)
   
   # set up evaluation data.table
-  Y.ho.hat <- data.table( dat.coords.ho, y.ho, y.hat.lm.cv = y.hat.lm.cv$fit, 
+  Y.ho.hat <- data.table( dat.coords.ho, y.ho, y.hat.lm.cv = y.hat.lm.cv$fit, y.hat.gam.cv = y.hat.gam.cv$fit, 
                           y.hat.lm.ncv = y.hat.lm.ncv$fit, y.hat.mean, y.hat.Z)
   Y.ho.hat.bias <- data.table( dat.coords.ho, y.ho, 
                                y.hat.lm.cv = y.hat.lm.cv$fit - y.ho, 
                                y.hat.lm.ncv = y.hat.lm.ncv$fit - y.ho, 
+                               y.hat.gam.cv = y.hat.gam.cv$fit - y.ho, 
                                y.hat.mean = y.hat.mean - y.ho, 
                                y.hat.Z = y.hat.Z - y.ho)
-  Y.ho.hat.se <- data.table( dat.coords.ho, y.hat.lm.cv = y.hat.lm.cv$se.fit, 
+  Y.ho.hat.se <- data.table( dat.coords.ho, y.hat.lm.cv = y.hat.lm.cv$se.fit, y.hat.gam.cv = y.hat.gam.cv$se.fit,  
                              y.hat.lm.ncv = y.hat.lm.ncv$se.fit)
   rscale.Z <- data.table( dat.coords.ho, x.rscale.Z, y.rscale.Z)
   
@@ -470,6 +480,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   crs.in <- crs( dat.stack)
   Y.ho.hat.raster <- projectRaster( rasterFromXYZ( Y.ho.hat, crs = crs.in), dat.stack)
   Y.ho.terms.raster <- projectRaster( rasterFromXYZ( Y.ho.terms.dt, crs = crs.in), dat.stack)
+  Y.ho.terms.gam.raster <- projectRaster( rasterFromXYZ( Y.ho.terms.gam.cv.dt, crs = crs.in), dat.stack)
   Y.ho.hat.se.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.se, crs = crs.in), dat.stack)
   Y.ho.hat.bias.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.bias, crs = crs.in), dat.stack)
   rscale.Z.raster <- projectRaster( rasterFromXYZ( rscale.Z, crs = crs.in), dat.stack)
@@ -490,6 +501,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   }
   metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.cv, y.ho, 'lm.cv'),
                         eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
+                        eval.fn( Y.ho.hat$y.hat.gam.cv, y.ho, 'gam.cv'),
                         eval.fn( Y.ho.hat$y.hat.mean, y.ho, 'adj.mean'),
                         eval.fn( Y.ho.hat$y.hat.Z, y.ho, 'adj.Z'),
                         eval.fn( y.rscale.Z, x.rscale.Z, 'adj.Z.only'))
@@ -503,14 +515,14 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
     for ( s in seq( 0.01, 1, .01)){
       q <- quantile( vals.idwe, s, na.rm = T)
       vals.use <- vals.eval[vals.idwe < q,]
-      evals <- eval.fn( vals.use$y.hat.lm.cv, vals.use$y.ho, x.name)[, s := s]
+      evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
       evals.q <- rbind( evals.q, evals)
     }
     for ( s in seq( 0.05, 1, .05)){
       q <- quantile( vals.idwe, s, na.rm = T)
       qq <- quantile( vals.idwe, s - .05, na.rm = T)
       vals.use <- vals.eval[vals.idwe < q & vals.idwe > qq,]
-      evals <- eval.fn( vals.use$y.hat.lm.cv, vals.use$y.ho, x.name)[, s := s]
+      evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
       evals.qq <- rbind( evals.qq, evals)
     }
   }
@@ -522,10 +534,12 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  evals.qq = evals.qq,
                  model.cv = lm.cv,
                  model.ncv = lm.ncv,
+                 model.gam = gam.cv,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
-                 Y.ho.terms.raster = Y.ho.terms.raster)
+                 Y.ho.terms.raster = Y.ho.terms.raster,
+                 Y.ho.terms.gam.raster = Y.ho.terms.gam.raster)
   if( !return.mods)
     out <- list( metrics = metrics.out, 
                  evals.q = evals.q,
@@ -533,7 +547,8 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
-                 Y.ho.terms.raster = Y.ho.terms.raster)
+                 Y.ho.terms.raster = Y.ho.terms.raster,
+                 Y.ho.terms.gam.raster = Y.ho.terms.gam.raster)
   
   return( out)
 }

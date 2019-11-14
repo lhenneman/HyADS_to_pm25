@@ -63,13 +63,13 @@ names( ddm2006) <- 'cmaq.ddm'
 ## Load monthly hyads
 #======================================================================#
 # read monthly grid files
-hyads2005.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_month_2005.csv', drop = 'V1')
-hyads2006.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_month_2006.csv', drop = 'V1')
+hyads2005.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_month_nopbl2005.csv', drop = 'V1')
+hyads2006.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_month_nopbl2006.csv', drop = 'V1')
 hyads2011.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2011grid/HyADS_grid_month_2011.csv', drop = 'V1')
 
 # create lists from monthly grid objects
 hyads2005.m.l <- split( hyads2005.m.dt, by = 'yearmonth')
-hyads2006.m.l <- split( hyads2005.m.dt, by = 'yearmonth')
+hyads2006.m.l <- split( hyads2006.m.dt, by = 'yearmonth')
 hyads2011.m.l <- split( hyads2011.m.dt, by = 'yearmonth')
 names( hyads2005.m.l) <- names( mets2005.m)
 names( hyads2006.m.l) <- names( mets2006.m)
@@ -93,8 +93,8 @@ hyads.m.all <- stack( stack( hyads2005.m), stack( hyads2006.m), stack( hyads2011
 #======================================================================#
 ## Load anuual hyads
 #======================================================================#
-hyads2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_2005.csv', drop = 'V1')
-hyads2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_2006.csv', drop = 'V1')
+hyads2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_annual_nopbl_5day_2005.csv', drop = 'V1')
+hyads2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_annual_nopbl_5day_2006.csv', drop = 'V1')
 hyads2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2011grid/HyADS_grid_2011.csv', drop = 'V1')
 hyads2005 <- rasterFromXYZ( hyads2005.dt[, .( x, y, hyads)], crs = p4s)
 hyads2006 <- rasterFromXYZ( hyads2006.dt[, .( x, y, hyads)], crs = p4s)
@@ -165,8 +165,12 @@ plot(mask.usa, add = T)
 plot( idwe.m$X2005.07.01)
 plot(mask.usa, add = T)
 
-plot( ddm.m.all$X2005.07.01)
+plot( ddm.m.all$X2005.06.01)
 plot(mask.usa, add = T)
+
+# plot( data.table( values( project_and_stack( hyads.m.all$X2005.08.01, ddm.m.all$X2005.08.01))))
+# plot( data.table( values( project_and_stack( hyads.m.all$X2005.12.01, ddm.m.all$X2005.12.01))))
+# plot( data.table( values( project_and_stack( idwe.m$X2005.12.01, ddm.m.all$X2005.12.01))))
 #======================================================================#
 # stack up and project annual data
 #======================================================================#
@@ -175,32 +179,22 @@ dats2005.a <- project_and_stack( ddm2005, hyads2005, idwe.a$`2005`,
 dats2006.a <- project_and_stack( ddm2006, hyads2006, idwe.a$`2006`, 
                                  mets2006, d_nonegu.r, mask.use = mask.usa)
 
+cor( values( dats2005.a), use = 'complete.obs')
+cor( values( dats2006.a), use = 'complete.obs')
 
-# need somehow to evaluate near vs far sources
-# approximate this as high/low tot.sum
-# says more about how emissions near sources are handled than
-# anything else
-# check out wind speed argument --- very key
-#  IDWE does better in years with slow windspeed?
-# plot cmaq range at each s
-# do MSE?
-cors.keep <- data.table()
-for (y in 2005:2006){
-  vals <- values( get( paste0( 'dats', y, '.a')))
-  for ( s in seq( 0.01, 1, .01)){
-    q <- quantile( vals[,'tot.sum'], s, na.rm = T)
-    cors <- cor( vals[vals[,'cmaq.ddm'] < q,], use = 'complete.obs', method = 'spearman') 
-    cors.keep <- rbind( cors.keep,
-                        data.table( s = s, hyads = cors['cmaq.ddm', 'hyads'],
-                                    idwe = cors['cmaq.ddm', 'tot.sum'], year = y))
-  }
-}
-cors.keep.m <- melt( cors.keep, id.vars = c( 's', 'year'))
-ggplot( data = cors.keep.m,
-        aes( x = s, y = value, color = variable, group = variable)) + 
-  geom_line() + facet_wrap( year ~ ., ncol = 2)
+dats2005.v <- data.table( values( dats2005.a))
+dats2006.v <- data.table( values( dats2006.a))
+plot( dats2005.v[, .(cmaq.ddm, hyads, tot.sum)])
+plot( dats2006.v[, .(cmaq.ddm, hyads, tot.sum)])
+plot( dats2005.a$cmaq.ddm < 1.2 & dats2005.a$hyads > 1.5e8)
+plot( dats2006.a$cmaq.ddm < 1.2 & dats2006.a$hyads > 1.5e8)
+d2005.red <- which( dats2005.v$cmaq.ddm < 1.2 & dats2005.v$hyads > 1.5e8)
+plot( dats2005.v[d2005.red,.(cmaq.ddm, hyads, tot.sum)], col = 'red')
 
-cors.keep[which.min( abs( hyads - idwe))]
+cor( dats2005.v[!d2005.red], use = 'complete.obs')
+
+plot( dats2005.v[!d2005.red,.(cmaq.ddm, hyads, tot.sum)])
+
 #======================================================================#
 ## Combine into raster stack, train model
 #======================================================================#
@@ -241,6 +235,10 @@ preds.ann.hyads05w06 <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.
 preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, x.name = 'tot.sum',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 
+# predict annual 2006 using model trained in 2005 - include inverse distance
+preds.ann.hyads06w05.i <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, 
+                                              ho.frac = 0, covars.names = c( cov.names, 'tot.sum'), return.mods = T)
+
 #======================================================================#
 ## Save data
 #======================================================================#
@@ -248,10 +246,30 @@ preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.
 # monthly stacks
 # annual model
 # monthly models
-save.list <- c( dats2005.a, )
+save( dats2005.a, dats2006.a,
+      preds.mon.hyads06w05, #preds.mon.hyads05w06,
+      preds.mon.idwe06w05,  #preds.mon.idwe05w06,
+      preds.ann.hyads06w05, #preds.ann.hyads05w06,
+      preds.ann.idwe06w05,  #preds.ann.idwe05w06,
+      file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models.RData')
+
 
 # do correlation comparisons on quintiles
 # scale all 3 on their Z score scale
+#======================================================================#
+## Annual plots
+#======================================================================#
+ggplot.a.raster( preds.ann.hyads06w05$Y.ho.hat.raster$y.hat.lm.cv,
+                 preds.ann.hyads06w05$Y.ho.hat.raster$y.hat.gam.cv,
+                 preds.ann.idwe06w05$Y.ho.hat.raster$y.hat.lm.cv,
+                 preds.ann.idwe06w05$Y.ho.hat.raster$y.hat.gam.cv,
+                 ncol. = 2, facet.names = c( 'lm - hyads', 'gam - hyads',
+                                             'lm - idwe',  'gam - idwe'),
+                 mask.raster = mask.usa)
+
+# preds.ann.hyads06w05$metrics
+# preds.ann.idwe06w05$metrics
+
 #======================================================================#
 ## Extract data, summarize, and plot
 #======================================================================#
@@ -263,8 +281,8 @@ save.list <- c( dats2005.a, )
 
 
 gg_out <- ggplot.a.raster( subset( ddm.m.all, 'X2005.07.01'),
-                           preds.mon.hyads05w06 ['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.lm.cv,
-                           preds.mon.idwe05w06 ['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.lm.cv,
+                           preds.mon.hyads05w06 ['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.gam.cv,
+                           preds.mon.idwe05w06 ['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.gam.cv,
                            mask.raster = mask.usa, facet.names = c( 'CMAQ', 'HyADS', 'IDWE'),
                            bounds = c( 0,8), ncol. = 1)
 
@@ -272,19 +290,19 @@ ggsave( '~/Dropbox/Harvard/Meetings_and_People/CMAS_2019/HyADS_pred_model_July.p
         height = 8, width = 3.5, scale = .7)
 
 # plots of monthly predictions
-ggplot.a.raster( preds.mon.hyads['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.02.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.03.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.04.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.05.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.06.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.07.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.08.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.09.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.10.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.11.01'][[1]]$y.hat.lm.cv,
-                 preds.mon.hyads['Y.ho.hat.raster','X2005.12.01'][[1]]$y.hat.lm.cv,
-                 bounds = c( 0,6), ncol. = 3, facet.names = month.name,
+ggplot.a.raster( preds.mon.hyads05w06['Y.ho.hat.raster','X2006.01.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.02.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.03.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.04.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.05.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.06.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.08.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.09.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.10.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.11.01'][[1]]$y.hat.gam.cv,
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.12.01'][[1]]$y.hat.gam.cv,
+                 bounds = c( 0,8), ncol. = 3, facet.names = month.name,
                  mask.raster = mask.usa)
 
 ggplot.a.raster( preds.mon.idwe['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.cv,
@@ -303,53 +321,195 @@ ggplot.a.raster( preds.mon.idwe['Y.ho.hat.raster','X2005.01.01'][[1]]$y.hat.lm.c
                  mask.raster = mask.usa)
 
 # plots of monthly error
-ggplot.a.raster( preds.mon.hyads['Y.ho.hat.bias.raster','X2005.01.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.01.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.02.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.02.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.03.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.03.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.04.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.04.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.05.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.05.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.06.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.06.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.07.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.07.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.08.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.08.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.09.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.09.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.10.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.10.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.11.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.11.01'),
-                 preds.mon.hyads['Y.ho.hat.bias.raster','X2005.12.01'][[1]]$y.hat.lm.cv / subset( ddm.m.all, 'X2005.12.01'),
+ggplot.a.raster( preds.mon.hyads05w06['Y.ho.hat.raster','X2006.01.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.01.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.02.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.02.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.03.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.03.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.04.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.04.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.05.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.05.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.06.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.06.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.07.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.08.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.08.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.09.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.09.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.10.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.10.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.11.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.11.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.raster','X2006.12.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.12.01'),
+                 bounds = c( -2,2), ncol. = 3, facet.names = month.name,
+                 mask.raster = mask.usa)
+
+ggplot.a.raster( preds.mon.idwe05w06['Y.ho.hat.raster','X2006.01.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.01.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.02.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.02.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.03.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.03.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.04.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.04.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.05.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.05.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.06.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.06.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.07.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.07.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.08.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.08.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.09.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.09.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.10.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.10.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.11.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.11.01'),
+                 preds.mon.idwe05w06['Y.ho.hat.raster','X2006.12.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.12.01'),
+                 bounds = c( -2,2), ncol. = 3, facet.names = month.name,
+                 mask.raster = mask.usa)
+
+ggplot.a.raster( preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.01.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.01.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.02.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.02.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.03.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.03.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.04.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.04.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.05.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.05.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.06.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.06.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.07.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.07.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.08.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.08.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.09.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.09.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.10.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.10.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.11.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.11.01'),
+                 preds.mon.hyads05w06['Y.ho.hat.bias.raster','X2006.12.01'][[1]]$y.hat.gam.cv / subset( ddm.m.all, 'X2005.12.01'),
                  bounds = c( -1,1), ncol. = 3, facet.names = month.name,
                  mask.raster = mask.usa)
 
+#======================================================================#
+## Check out the covariates
+#======================================================================#
 # plots of monthly covariate contributions
-ggplot.a.raster( preds.mon['Y.ho.terms.raster','X2005.01.01'][[1]],
+# average of each covariate over the year
+# spatial plots of just HyADS/spline covariates over the year
+covs.all <- names( preds.ann.hyads06w05$Y.ho.terms.gam.raster)
+covs.all.idwe <- names( preds.ann.idwe06w05$Y.ho.terms.gam.raster)
+covs.hyads <- covs.all[grep( 'hyads', covs.all)]
+covs.hyads.s <- c( covs.hyads, "s.x.y.")
+covs.tot.sum  <- covs.all.idwe[grep( 'tot.sum', covs.all.idwe)]
+covs.tot.sum.s  <- c( covs.tot.sum, "s.x.y.")
+covs.idwe  <- gsub( 'tot.sum', 'idwe', covs.tot.sum)
+covs.idwe.s  <- gsub( 'tot.sum', 'idwe', covs.tot.sum.s)
+
+# plot hyads related covariates for different years
+ggplot.a.raster( unstack( stack( subset( preds.ann.hyads06w05$Y.ho.terms.gam.raster, covs.hyads.s),
+                                 subset( preds.ann.hyads05w06$Y.ho.terms.gam.raster, covs.hyads.s))),
+                 bounds = c( -4,4), ncol. = 7, mask.raster = mask.usa,
+                 facet.names = paste( covs.hyads.s, rep( c( '06w05', '05w06'), each = 7)))
+ggplot.a.raster( unstack( stack( subset( preds.ann.idwe06w05$Y.ho.terms.gam.raster, covs.tot.sum.s),
+                                 subset( preds.ann.idwe05w06$Y.ho.terms.gam.raster, covs.tot.sum.s))),
+                 bounds = c( -4,4), ncol. = 7, mask.raster = mask.usa,
+                 facet.names = paste( covs.tot.sum.s, rep( c( '06w05', '05w06'), each = 7)))
+
+# sum all hyads/tot.sum contributions
+hyads_gamters <- stack( sum( subset( preds.ann.hyads06w05$Y.ho.terms.gam.raster, covs.hyads)),
+                        subset( preds.ann.hyads06w05$Y.ho.terms.gam.raster, 's.x.y.'),
+                        sum( subset( preds.ann.hyads05w06$Y.ho.terms.gam.raster, covs.hyads)),
+                        subset( preds.ann.hyads05w06$Y.ho.terms.gam.raster, 's.x.y.'),
+                        sum( subset( preds.ann.idwe06w05$Y.ho.terms.gam.raster, covs.tot.sum)),
+                        subset( preds.ann.idwe06w05$Y.ho.terms.gam.raster, 's.x.y.'),
+                        sum( subset( preds.ann.idwe05w06$Y.ho.terms.gam.raster, covs.tot.sum)),
+                        subset( preds.ann.idwe05w06$Y.ho.terms.gam.raster, 's.x.y.'))
+ggplot.a.raster( unstack( hyads_gamters),
+                 bounds = c( -4,4), ncol. = 2, mask.raster = mask.usa,
+                 facet.names = c( paste( c( 'hyads', 'hyads s.x.y.'), 
+                                         rep( c( '06w05', '05w06'), each = 2)),
+                                  paste( c( 'idwe', 'idwe s.x.y.'), 
+                                         rep( c( '06w05', '05w06'), each = 2))))
+
+# plot hyads related covariates for different months
+gamters.mon06w05 <- stack( lapply( colnames( preds.mon.hyads06w05), 
+                                   function( x) {
+                                     subset( preds.mon.hyads06w05['Y.ho.terms.gam.raster', x][[1]], covs.hyads)
+                                   }))
+gamters.mon06w05.i <- stack( lapply( colnames( preds.mon.idwe06w05), 
+                                     function( x) {
+                                       subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], covs.idwe)
+                                     }))
+gamters.mon05w06 <- stack( lapply( colnames( preds.mon.hyads05w06), 
+                                   function( x) {
+                                     subset( preds.mon.hyads05w06['Y.ho.terms.gam.raster', x][[1]], covs.hyads)
+                                   }))
+names.gamters <- paste( covs.hyads, rep( month.abb, each = 7))
+names.gamters.i <- paste( covs.idwe, rep( month.abb, each = 7))
+ggplot.a.raster( unstack( gamters.mon06w05),
+                 bounds = c( -4,4), ncol. = 7, mask.raster = mask.usa,
+                 facet.names = names.gamters)
+ggplot.a.raster( unstack( gamters.mon06w05.i),
+                 bounds = c( -4,4), ncol. = 7, mask.raster = mask.usa,
+                 facet.names = names.gamters.i)
+ggplot.a.raster( unstack( gamters.mon05w06),
+                 bounds = c( -4,4), ncol. = 7, mask.raster = mask.usa,
+                 facet.names = names.gamters)
+
+# sum all hyads/tot.sum contributions
+gamters.mon06w05.hyadssum <- stack( lapply( colnames( preds.mon.hyads06w05), 
+                                            function( x) {
+                                              stack( sum( subset( preds.mon.hyads06w05['Y.ho.terms.gam.raster', x][[1]], covs.hyads)),
+                                                     subset( preds.mon.hyads06w05['Y.ho.terms.gam.raster', x][[1]], 's.x.y.'))
+                                            }))
+gamters.mon06w05.idwesum <- stack( lapply( colnames( preds.mon.idwe06w05), 
+                                            function( x) {
+                                              stack( sum( subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], covs.idwe)),
+                                                     subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], 's.x.y.'))
+                                            }))
+names.gamters.hy <- paste( c( 'hyads', 's.x.y.'), rep( month.abb, each = 2))
+names.gamters.is <- paste( c( 'idwe', 's.x.y.'), rep( month.abb, each = 2))
+ggplot.a.raster( unstack( gamters.mon06w05.hyadssum),
                  bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
-                 facet.names = names( preds.mon['Y.ho.terms.raster','X2005.01.01'][[1]]))
-ggplot.a.raster( preds.mon['Y.ho.terms.raster','X2005.07.01'][[1]],
+                 facet.names = names.gamters.hy)
+ggplot.a.raster( unstack( gamters.mon06w05.idwesum),
                  bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
-                 facet.names = names( preds.mon['Y.ho.terms.raster','X2005.07.01'][[1]]))
+                 facet.names = names.gamters.is)
+
+
+ggplot.a.raster( preds.ann.hyads06w05$Y.ho.terms.raster,
+                 bounds = c( -4,4), ncol. = 5, mask.raster = mask.usa,
+                 facet.names = names( preds.ann.hyads06w05$Y.ho.terms.raster))
+ggplot.a.raster( preds.ann.hyads06w05$Y.ho.terms.gam.raster,
+                 bounds = c( -4,4), ncol. = 5, mask.raster = mask.usa,
+                 facet.names = names( preds.ann.hyads06w05$Y.ho.terms.gam.raster))
+ggplot.a.raster( preds.mon.hyads06w05['Y.ho.terms.raster','X2005.01.01'][[1]],
+                 bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
+                 facet.names = names( preds.mon.hyads06w05['Y.ho.terms.raster','X2005.01.01'][[1]]))
+ggplot.a.raster( preds.mon.hyads06w05['Y.ho.terms.raster','X2005.07.01'][[1]],
+                 bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
+                 facet.names = names( preds.mon.hyads06w05['Y.ho.terms.raster','X2005.07.01'][[1]]))
+ggplot.a.raster( preds.mon.hyads06w05['Y.ho.terms.gam.raster','X2005.01.01'][[1]],
+                 bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
+                 facet.names = names( preds.mon.hyads06w05['Y.ho.terms.gam.raster','X2005.01.01'][[1]]))
+ggplot.a.raster( preds.mon.hyads05w06['Y.ho.terms.gam.raster','X2006.07.01'][[1]],
+                 bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
+                 facet.names = names( preds.mon.hyads05w06['Y.ho.terms.gam.raster','X2006.07.01'][[1]]))
+ggplot.a.raster( preds.mon.idwe05w06['Y.ho.terms.gam.raster','X2006.07.01'][[1]],
+                 bounds = c( -4,4), ncol. = 4, mask.raster = mask.usa,
+                 facet.names = names( preds.mon.idwe05w06['Y.ho.terms.gam.raster','X2006.07.01'][[1]]))
 
 
 #======================================================================#
 ## Plot the metrics
 #======================================================================#
 ## extract evaluation statistics
-preds.metrics.hyads <- preds.mon.hyads06w05[ 'metrics',]
-preds.metrics.idwe  <- preds.mon.idwe06w05[ 'metrics',]
+## IDWE gets big change from bivariate spline, HyADS does not  
+preds.metrics.hyads <- preds.mon.hyads05w06[ 'metrics',]
+preds.metrics.idwe  <- preds.mon.idwe05w06[ 'metrics',]
 
 metrics <- data.table( month = c( as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.hyads)))),
                                   as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.idwe))))),
                        model = c( rep( 'hyads', length( names( preds.metrics.hyads))),
                                   rep( 'idwe', length( names( preds.metrics.idwe)))),
-                       'R^2' = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$R^2),
+                       class = c( rep( 'gam', 2 * length( names( preds.metrics.hyads))),
+                                  rep( 'lm', 2 * length( names( preds.metrics.idwe)))),
+                       'R^2' = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'gam.cv']$R^2),
+                                  sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'gam.cv']$R^2),
+                                  sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$R^2),
                                   sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$R^2)),
-                       NMB = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$NMB),
+                       NMB = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'gam.cv']$NMB),
+                                sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'gam.cv']$NMB),
+                                sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$NMB),
                                 sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$NMB)),
-                       NME = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$NME),
+                       NME = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'gam.cv']$NME),
+                                sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'gam.cv']$NME),
+                                sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$NME),
                                 sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$NME)),
-                       RMSE = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$RMSE),
+                       RMSE = c( sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'gam.cv']$RMSE),
+                                 sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'gam.cv']$RMSE),
+                                 sapply( preds.metrics.hyads, function( dt) dt[ mod.name == 'lm.cv']$RMSE),
                                  sapply( preds.metrics.idwe, function( dt) dt[ mod.name == 'lm.cv']$RMSE)))
-metrics.m <- melt( metrics, id.vars = c( 'model', 'month'), variable.name = 'metric')
+metrics.m <- melt( metrics, id.vars = c( 'model', 'month', 'class'), variable.name = 'metric')
 
 ggplot( data = metrics.m,
-        aes( x = month, y = value, group = model, color = model)) + 
+        aes( x = month, y = value, lty = class, color = model)) + 
   geom_line() + geom_point() + 
   facet_wrap( . ~ metric, scales = 'free_y', ncol = 1, labeller = label_parsed) + 
   expand_limits( y = 0)
@@ -384,22 +544,53 @@ ggplot( data = metrics.Z.only.m,
 ## Plot changes in evaluation in different areas
 #======================================================================#
 
-cors.keep.month.hyads <- rbindlist( preds.mon.hyads05w06['evals.qq',], idcol = 'month')
-cors.keep.month.idwe  <- rbindlist( preds.mon.idwe05w06['evals.qq',], idcol = 'month')
-cors.keep.month <- rbind( cors.keep.month.hyads, cors.keep.month.idwe)
-cors.keep.m <- melt( cors.keep.month, id.vars = c( 'mod.name', 's', 'month'))
+cors.keep.month.hyads.u05w06 <- rbindlist( preds.mon.hyads05w06['evals.q',], idcol = 'month')[, y := '05w06']
+cors.keep.month.hyads.u06w05 <- rbindlist( preds.mon.hyads06w05['evals.q',], idcol = 'month')[, y := '06w05']
+cors.keep.month.idwe.u05w06  <- rbindlist( preds.mon.idwe05w06['evals.q',], idcol = 'month')[, y := '05w06']
+cors.keep.month.idwe.u06w05  <- rbindlist( preds.mon.idwe06w05['evals.q',], idcol = 'month')[, y := '06w05']
+cors.keep.month <- rbind( cors.keep.month.hyads.u05w06, cors.keep.month.hyads.u06w05,
+                          cors.keep.month.idwe.u05w06, cors.keep.month.idwe.u06w05)
+cors.keep.m <- melt( cors.keep.month, id.vars = c( 'mod.name', 's', 'month', 'y'))
+cors.keep.m[, month := month( as.Date( gsub( 'X', '', month), format = '%Y.%m.%d'))]
 ggplot( data = cors.keep.m,
-        aes( x = s, y = value, color = mod.name, group = mod.name)) + 
+        aes( x = s, y = value, color = mod.name, lty = y)) + 
   geom_hline( yintercept = 0) +
-  facet_grid( variable ~ month, scales = 'free') +  geom_line() 
+  facet_grid( variable ~ month, scales = 'free_y') +  geom_line() 
 
 
 # plot annual evaluation across s
-cors.keep.u <- rbind( preds.ann.hyads05w06$evals.q, preds.ann.idwe05w06$evals.q)
-cors.keep.m <- melt( cors.keep.u, id.vars = c( 'mod.name', 's'))
+cors.keep.u06w05 <- rbind( preds.ann.hyads06w05$evals.q, preds.ann.idwe06w05$evals.q)[, y := '06w05']
+cors.keep.u05w06 <- rbind( preds.ann.hyads05w06$evals.q, preds.ann.idwe05w06$evals.q)[, y := '05w06']
+cors.keep.u <- rbind( cors.keep.u06w05, cors.keep.u05w06)
+cors.keep.m <- melt( cors.keep.u, id.vars = c( 'mod.name', 's', 'y'))
 ggplot( data = cors.keep.m,
-        aes( x = s, y = value, color = mod.name, group = mod.name)) + 
+        aes( x = s, y = value, color = mod.name, lty = y)) + 
   geom_hline( yintercept = 0) +
-  facet_wrap( . ~ variable) +  geom_line() 
+  facet_wrap( . ~ variable, scales = 'free_y') +  geom_line() 
 
 
+# need somehow to evaluate near vs far sources
+# approximate this as high/low tot.sum
+# says more about how emissions near sources are handled than
+# anything else
+# check out wind speed argument --- very key
+#  IDWE does better in years with slow windspeed?
+# plot cmaq range at each s
+# do MSE?
+cors.keep <- data.table()
+for (y in 2005:2006){
+  vals <- values( get( paste0( 'dats', y, '.a')))
+  for ( s in seq( 0.01, 1, .01)){
+    q <- quantile( vals[,'tot.sum'], s, na.rm = T)
+    cors <- cor( vals[vals[,'cmaq.ddm'] < q,], use = 'complete.obs', method = 'spearman') 
+    cors.keep <- rbind( cors.keep,
+                        data.table( s = s, hyads = cors['cmaq.ddm', 'hyads'],
+                                    idwe = cors['cmaq.ddm', 'tot.sum'], year = y))
+  }
+}
+cors.keep.m <- melt( cors.keep, id.vars = c( 's', 'year'))
+ggplot( data = cors.keep.m,
+        aes( x = s, y = value, color = variable, group = variable)) + 
+  geom_line() + facet_wrap( year ~ ., ncol = 2)
+
+cors.keep[which.min( abs( hyads - idwe))]

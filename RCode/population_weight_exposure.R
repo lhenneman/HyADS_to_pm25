@@ -45,40 +45,54 @@ us_counties.pop11 <- us_counties.pop11[ state_name %in% states.lower]
 # read annual HyADS in 2005
 ## =========================================================== ##
 p4s <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000"
-hyads2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_2005.csv', drop = 'V1')
-hyads2005 <- rasterFromXYZ( hyads2005.dt[, .( x, y, hyads)], crs = p4s)
+load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models.RData')
+# 
+# # load the models 
+# hyads.ann.model <- preds.ann.hyads06w05$model.gam
+# idwe.ann.model <- preds.ann.idwe06w05$model.gam
+# 
+# # set up the dataset
+# dat.coords <- coordinates( dats2006.a)
+# dats2006raw.dt <- data.table( cbind( dat.coords, values( dats2006.a)))
+# 
+# # do the predictions
+# hyads2005.pred <- predict( hyads.ann.model, newdata = dats2006raw.dt)
+# idwe2005.pred <- predict( idwe.ann.model, newdata = dats2006raw.dt)
+# 
+# # rasterize
+# dats2005.r <- rasterFromXYZ( data.table( dat.coords, hyads2005.pred, idwe2005.pred), crs = p4s)
 
 ## =========================================================== ##
 ## # get everything on the same crs
 ## =========================================================== ##
 us_counties06.sf <- st_transform( st_as_sf( us_counties.pop06), crs = p4s)
 us_counties11.sf <- st_transform( st_as_sf( us_counties.pop11), crs = p4s)
-hyads2005.sf <- st_as_sf( rasterToPolygons( hyads2005))
+dats2005.sf <- st_as_sf( rasterToPolygons( dats2006.a))
 
 ## =========================================================== ##
 ## # area weight to hyads grid
 ## =========================================================== ##
-hyads_grid_popwgt06 <- st_interpolate_aw( us_counties06.sf['POP'], 
-                                          hyads2005.sf, extensive = T)
-hyads_grid_popwgt11 <- st_interpolate_aw( us_counties11.sf['POP'], 
-                                          hyads2005.sf, extensive = T)
+grid_popwgt06 <- st_interpolate_aw( us_counties06.sf['POP'], 
+                                          dats2005.sf, extensive = T)
+grid_popwgt11 <- st_interpolate_aw( us_counties11.sf['POP'], 
+                                          dats2005.sf, extensive = T)
 
 ## =========================================================== ##
 ## # onvert to raster and save
 ## =========================================================== ##
-hyads_grid06.r <- fasterize( hyads_grid_popwgt06, hyads2005, field = 'POP')
-hyads_grid11.r <- fasterize( hyads_grid_popwgt11, hyads2005, field = 'POP')
-hyads_grid.xyz <- rbind( data.table( rasterToPoints( hyads_grid06.r))[, year := 2006],
-                         data.table( rasterToPoints( hyads_grid11.r))[, year := 2011])
+grid_popwgt06.r <- fasterize( grid_popwgt06, raster( dats2006.a), field = 'POP')
+grid_popwgt11.r <- fasterize( grid_popwgt11, raster( dats2006.a), field = 'POP')
+grid_popwgt.xyz <- dcast( rbind( data.table( rasterToPoints( grid_popwgt06.r))[, year := 2006],
+                         data.table( rasterToPoints( grid_popwgt11.r))[, year := 2011]),
+                         x + y ~ year, value.var = 'layer')
 
-setnames( hyads_grid.xyz, 'layer', 'population')
-write.csv( hyads_grid.xyz, file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv')
+write.csv( grid_popwgt.xyz, file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv')
 
 
 ## =========================================================== ##
 ## #plot
 ## =========================================================== ##
-ggplot( data = us_counties.pop[state_name %in% states.lower]) + 
+ggplot( data = us_counties.pop06[state_name %in% states.lower]) + 
   facet_wrap( . ~ year, ncol = 1) +
   geom_sf( aes( fill = as.numeric( POP) / aland, geometry = geometry),
            color = NA) + 

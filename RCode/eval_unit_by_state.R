@@ -78,9 +78,9 @@ adj.stack_height_plus2 <- read.adj( base.dir = '~/Dropbox/Harvard/RFMeval_Local/
 
 
 library( tidycensus)
-census_api_key("YOUR API KEY GOES HERE")
-us_pops <- get_estimates(geography = "state", product = "population", year = c( 2006, 2011),
-                         state = state.name[state.abb %in% unique( adj.other_states$state)])
+census_api_key("6120c82cfe5ed2b6f8dbed17dc946e7b05307a39", install = TRUE, overwrite = TRUE)
+us_pops <- get_estimates(geography = "state", product = "population", year = 2006,
+                         state = 'California') #state.name[state.abb %in% unique( adj.other_states$state)])
 
 
 
