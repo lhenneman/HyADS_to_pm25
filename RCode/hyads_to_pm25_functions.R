@@ -166,11 +166,11 @@ usa.functioner <- function( year.in = 2005,
   
   # extract year
   if( avg.period == 'year'){
-    mets <- brick( lapply( list.met,
-                           extract_year.fn,
-                           year.in = year.in,
-                           avg.period = avg.period,
-                           dataset = dataset))
+    mets <- lapply( list.met,
+                    extract_year.fn,
+                    year.in = year.in,
+                    avg.period = avg.period,
+                    dataset = dataset)
   } else
     mets <- lapply( list.met,
                     extract_year.fn,
@@ -195,40 +195,56 @@ usa.functioner <- function( year.in = 2005,
   }
   
   # download USA polygon from rnaturalearth
-  usa <- rnaturalearth::ne_countries(scale = 110, type = "countries", country = "United States of America", 
-                                     geounit = NULL, sovereignty = NULL,
-                                     returnclass = c("sp"))
-  usa.sub <- disaggregate(usa)[6,]
-  usa.sub <- spTransform(usa.sub, CRSobj = crs.str) #proj4string( ))
+  us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
+  us_states <- st_transform( USAboundaries::us_states(), crs.str)
+  us_states.sp <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
   
   if( return.usa.mask){
-    usa.sub.p <- spTransform(usa.sub, CRSobj = crs.usa)
-    # usa.sub.sf <- sf::st_as_sf( usa.sub.p)
-    return( usa.sub.p)
+    return( us_states.sp)
   }
   
   if( return.usa.sub){
+    mets_crop <- rasterize( us_states.sp, mets[[1]], getCover=TRUE)
+    mets_crop[mets_crop==0] <- NA
+    mets_crop[!is.na( mets_crop)] <- 1
+    
     # crop to USA
     if( avg.period == 'year'){
-      mets.out <- crop( mask(mets, usa.sub), usa.sub)
-    } else{ 
-      mets.mask <- lapply( mets, mask, usa.sub)
-      mets.usa <- lapply( mets.mask, crop, usa.sub)
+      mets.out.l <- lapply( mets, function( x){
+        trim( mask(x, mets_crop, maskvalue = NA),
+              padding = 1)
+      })
       
-      # reorganize - list of months
-      names.months <- names( mets.usa[[1]])
-      mets.out <- lapply( names.months, 
-                          function( name.ext, X){
-                            brick( lapply( X, '[[', name.ext))
-                          }, mets.usa)
+      mets.out <- brick( mets.out)
+      
+    } else{ 
+      names.months <- names( mets[[1]])
+      mets.out.l <- lapply( mets, 
+                            function( x){
+                              lapply( names.months, 
+                                      function( y){
+                                        r <- subset( x, y)
+                                        trim( mask(r, mets_crop, maskvalue = NA),
+                                              padding = 1)
+                                      })})
+      
+      mets.out.b <- lapply( names.months, 
+                            function( n){
+                              lapply( mets.out.l, function( l){
+                                b <- brick( l)
+                                subset( b, n)
+                              })
+                            })
+      
+      # each month is a brick
+      mets.out <- lapply( mets.out.b, brick)
       names( mets.out) <- names.months
     }
-    
     
     return( mets.out)
   } else{
     if( avg.period == 'year'){
-      mets.out <- mets
+      mets.out <- brick( mets)
     } else{ 
       
       # reorganize - list of months
@@ -577,9 +593,13 @@ ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL,
   if( length( in.x) == 1)
     in.x <- in.x[[1]]
   
+  if( is.null( facet.names))
+    facet.names <- lapply( in.x, names)
+  
   if( is.null( names( in.x)) & !is.null( facet.names))
     names( in.x) <- facet.names
   
+  in.x.crop <- in.x
   if( !is.null( mask.raster) & is.list( in.x))
     in.x.crop <- lapply( in.x, function( X, mask.raster.){
       X.mask <- mask( X, mask.raster.)
@@ -591,7 +611,7 @@ ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL,
     in.x.crop <- crop( in.x.mask, mask.raster)
   }
   
-  dat.dt <- rbindlist( lapply( names( in.x.crop), function( x.name, x.list) {
+  dat.dt <- rbindlist( lapply( facet.names, function( x.name, x.list) {
     x <- x.list[[x.name]]
     r_points <- rasterToPoints( x)
     r_dt <- data.table( r_points)[, name.in := x.name]
@@ -612,6 +632,7 @@ ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL,
            axis.title = element_blank(),
            axis.ticks = element_blank(),
            legend.position = 'bottom',
+           legend.key.width = unit( ncol( in.x[[1]])/3000, 'npc'),
            panel.grid = element_blank(),
            strip.background = element_blank())
 }
@@ -668,6 +689,9 @@ month.trainer <- function( name.m = names( mets2005.m)[1],
 
 #======================================================================#
 # project and stack in one command
+# ## need to update masking in all functions - cells with centroid not covered are cropped
+##   https://gis.stackexchange.com/questions/255025/r-raster-masking-a-raster-by-polygon-also-remove-cells-partially-covered
+## should probably update usa mask too - need to use USAboundaries for consistency
 #======================================================================#
 project_and_stack <- function( ..., mask.use = NULL){
   list.r <- list( ...)
@@ -677,9 +701,149 @@ project_and_stack <- function( ..., mask.use = NULL){
   
   # mask over usa
   if( !is.null( mask.use)){
-    list.out <- lapply( list.r, mask, mask.use)
+    mask.use <- spTransform( mask.use, crs( list.r[[1]]))
+    mask_crop <- rasterize( mask.use, list.r[[1]], getCover=TRUE)
+    mask_crop[mask_crop==0] <- NA
+    mask_crop[!is.na( mask_crop)] <- 1
+    
+    list.out <- lapply( list.r, function( x){
+      trim( mask(x, mask_crop, maskvalue = NA),
+            padding = 1)
+    })
+    
   } else
     list.out <- list.r
   
   return( stack( list.out))
 }
+
+#======================================================================#
+## function for converting individual unit concentrations to ugm3
+# inputs - filename of grid w/ unit or summed impacts
+#        - model
+#        - covariate raster
+#        - 'x' name in the raster from model
+# 
+# output - data table of state, pop-wgted impact for all input units
+#======================================================================#
+state_exposurer <- function( 
+  month.n,
+  fstart,
+  year.m = 2006,
+  model.dataset = preds.mon.idwe06w05,
+  model.name = 'model.cv', #'model.gam'
+  name.x = 'idwe',
+  mask.use = mask.usa[ mask.usa$state_abbr %in% c( 'GA', 'KY'),],
+  ddm.m = ddm.m.all,
+  mets.m = mets.m.all,
+  emiss.m = d_nonegu.r,
+  idwe.m. = idwe.m,
+  hyads.m = hyads.m.all,
+  grid_pop.r = grid_popwgt.r,
+  state_pops = copy( us_states.pop.dt)
+){
+  message( paste( 'Converting', month.name[month.n]))
+  
+  month.N <- formatC( month.n, width = 2, flag = '0')
+  name.m <- paste0( 'X', year.m, '.', month.N, '.01')
+  model.m <- paste0( 'X2005.', month.N, '.01')
+  popyr.name <- paste0( 'X', year.m)
+  name.Date <- as.Date( name.m, format = 'X%Y.%m.%d')
+  
+  if( name.x == 'idwe'){
+    fname <- paste0( fstart, year.m, '_', month.n, '.csv')
+  } else
+    fname <- paste0( fstart, year.m, '_', month.N, '.csv')
+  
+  # create prediction dataset
+  # ddm.use.p <- ddm.m[[name.m]]
+  mets.use.p <- mets.m[[name.m]]
+  idwe.use.p <- idwe.m.[[name.m]]
+  hyads.use.p <- hyads.m[[name.m]]
+  
+  # fix names
+  # names( ddm.use.p)   <- 'cmaq.ddm'
+  names( hyads.use.p) <- 'hyads'
+  names( idwe.use.p) <- 'idwe'
+  
+  # rename population raster
+  grid_pop.r <- grid_pop.r[[popyr.name]]
+  names( grid_pop.r) <- 'pop'
+  
+  dat.s <- project_and_stack( #ddm.use.p,   
+    hyads.use.p,   idwe.use.p,   
+    mets.use.p, emiss.m, grid_pop.r, mask.use = mask.use)
+  
+  # assign state names to raster
+  mask.r <- rasterize( mask.use[,'state_abbr'], dat.s[[1]])
+  mask.a <- levels( mask.r)[[1]]
+  dat.s$ID <- mask.r
+  
+  # read in, rasterize new x file
+  x.in <- fread( fname, drop = c( 'V1'))
+  suppressWarnings( x.in[, `:=` ( yearmon = NULL, yearmonth = NULL)])
+  x.r <- rasterFromXYZ( x.in, crs = p4s)
+  x.n <- paste0( 'X', names( x.in)[!(names( x.in) %in% c( 'x', 'y'))])
+  x.n <- gsub( '^XX', 'X', x.n)
+  names( x.r) <- x.n
+  x.proj <-  project_and_stack( dat.s[[1]], x.r, mask.use = mask.use)
+  
+  # pick out the appropriate model
+  model.use <- model.dataset[ model.name, model.m][[1]]
+  
+  # do the predictions
+  pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
+  pred_popwgt.r <- brick( lapply( x.n, function( n){
+    gc()
+    # assign unit to prediction dataset
+    dat.use <- copy( dat.s)
+    dat.use[[name.x]] <- x.proj[[n]]
+    
+    # set up the dataset
+    dat.coords <- coordinates( dat.use)
+    dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
+    
+    # do the predictions
+    dat.pred <- predict( model.use, newdata = dat_raw.dt)
+    
+    # rasterize
+    dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
+    
+    # multiply by population
+    dats.r <- dats.r * dat.use[['pop']]
+    
+    names( dats.r) <- n
+    setTxtProgressBar(pb, which( x.n == n))
+    return( dats.r)
+  }))
+  close( pb)
+  
+  # calculate population-weighted by state
+  pred_popwgt.r$ID <- mask.r
+  pred_popwgt.dt <- data.table( values( pred_popwgt.r))
+  pred_popwgt.dt.m <- na.omit( melt( pred_popwgt.dt, id.vars = 'ID', variable.name = 'uID'))
+  pred_popwgt.dt.s <- pred_popwgt.dt.m[, .( mean_popwgt = mean( value)), by = .( ID, uID)]
+  
+  # now just divide by each state's total population
+  setnames( state_pops, popyr.name, 'pop_amnt')
+  
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, state_pops[, .( state_abbr, pop_amnt)],
+                             by = 'state_abbr')
+  
+  #calculate pop-weighted for the entire domain
+  pred_popwgt.dt.all <- pred_popwgt.dt.m[, .( mean_popwgt = mean( value)), by = .( uID)]
+  pop.tot <- sum( state_pops$pop_amnt)
+  pred_popwgt.dt.all[, `:=` (pop_amnt = pop.tot,
+                             ID = 100,
+                             state_abbr = 'US')]
+  
+  #merge state and total datasets
+  pred_popwgt.out <- rbind( pred_popwgt.dt.s, pred_popwgt.dt.all)
+  
+  pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
+                          month = name.Date)]
+  
+  return( pred_popwgt.out[, .( state_abbr, uID, month, popwgt)])
+}
+

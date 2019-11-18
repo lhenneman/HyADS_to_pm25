@@ -73,9 +73,9 @@ dats2005.sf <- st_as_sf( rasterToPolygons( dats2006.a))
 ## # area weight to hyads grid
 ## =========================================================== ##
 grid_popwgt06 <- st_interpolate_aw( us_counties06.sf['POP'], 
-                                          dats2005.sf, extensive = T)
+                                    dats2005.sf, extensive = T)
 grid_popwgt11 <- st_interpolate_aw( us_counties11.sf['POP'], 
-                                          dats2005.sf, extensive = T)
+                                    dats2005.sf, extensive = T)
 
 ## =========================================================== ##
 ## # onvert to raster and save
@@ -83,8 +83,8 @@ grid_popwgt11 <- st_interpolate_aw( us_counties11.sf['POP'],
 grid_popwgt06.r <- fasterize( grid_popwgt06, raster( dats2006.a), field = 'POP')
 grid_popwgt11.r <- fasterize( grid_popwgt11, raster( dats2006.a), field = 'POP')
 grid_popwgt.xyz <- dcast( rbind( data.table( rasterToPoints( grid_popwgt06.r))[, year := 2006],
-                         data.table( rasterToPoints( grid_popwgt11.r))[, year := 2011]),
-                         x + y ~ year, value.var = 'layer')
+                                 data.table( rasterToPoints( grid_popwgt11.r))[, year := 2011]),
+                          x + y ~ year, value.var = 'layer')
 
 write.csv( grid_popwgt.xyz, file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv')
 

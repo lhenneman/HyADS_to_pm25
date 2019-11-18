@@ -156,8 +156,10 @@ names( idwe.a) <- unique( idwe.dt$year)
 ##                Plots
 ## ========================================================= ##
 # get usa mask for masking
-mask.usa <- usa.functioner( list.met = list.met, return.usa.mask = T)
-mask.usa <- spTransform( mask.usa, CRSobj = crs( p4s))
+# download USA polygon from rnaturalearth
+us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
+us_states <- st_transform( USAboundaries::us_states(), p4s)
+mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
 
 plot( hyads.m.all$X2005.07.01)
 plot(mask.usa, add = T)
@@ -247,6 +249,8 @@ preds.ann.hyads06w05.i <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stac
 # annual model
 # monthly models
 save( dats2005.a, dats2006.a,
+      hyads.m.all, ddm.m.all, mets.m.all,
+      idwe.m, d_nonegu.r,
       preds.mon.hyads06w05, #preds.mon.hyads05w06,
       preds.mon.idwe06w05,  #preds.mon.idwe05w06,
       preds.ann.hyads06w05, #preds.ann.hyads05w06,

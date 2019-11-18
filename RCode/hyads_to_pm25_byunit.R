@@ -24,7 +24,7 @@ idwe2006.pred <- predict( idwe.ann.model, newdata = dats2006raw.dt)
 
 # rasterize
 dats2006.r <- rasterFromXYZ( data.table( dat.coords, hyads2006.pred, idwe2006.pred), crs = p4s)
-
+dats2006.r[is.na( dats2006.r)] <- 0
 #======================================================================#
 ## get total state populations
 #======================================================================#
@@ -32,6 +32,10 @@ grid_popwgt.xyz <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_g
                           drop = 'V1')
 
 grid_popwgt.r <- rasterFromXYZ( grid_popwgt.xyz, crs = p4s)
+grid_popwgt2006.r <- grid_popwgt.r$X2006
+
+ggplot.a.raster( unstack( grid_popwgt.r), bounds = c( 0, .5e6), facet.names = c( '2006', '2011'))
+
 grid_popwgt.sf <- st_as_sf( rasterToPolygons( grid_popwgt.r))
 
 # get total state populations
@@ -41,6 +45,7 @@ us_states.p <- st_interpolate_aw( grid_popwgt.sf, us_states, extensive = T)
 # merge back to state information
 us_states.pop <- cbind( us_states.p, us_states[us_states.p$Group.1,])
 us_states.pop$geometry.1 <- NULL
+us_states.pop.dt <- data.table( us_states.pop)
 
 #======================================================================#
 ## area weight over states
@@ -49,24 +54,68 @@ us_states.pop$geometry.1 <- NULL
 dats2006_popwgt.r <- project_and_stack( dats2006.r, grid_popwgt.r)
 
 # weight by 2006 population
-dats2006_popwgt.names <- names( dats2006_popwgt.r)
-dats2006_popwgt.r <- dats2006_popwgt.r * dats2006_popwgt.r$X2006
+dats2006_popwgt.names <- names( dats2006.r)
+dats2006_popwgtexp.r <- subset( dats2006_popwgt.r, dats2006_popwgt.names)
+dats2006_popwgt.r <- dats2006_popwgtexp.r * dats2006_popwgt.r$X2006
 names( dats2006_popwgt.r) <- dats2006_popwgt.names
 
 # take over states
 dats2006_popwgt.sf <- st_as_sf( rasterToPolygons( dats2006_popwgt.r))
-plot( dats2006_popwgt.sf[is.na( dats2006_popwgt.sf$hyads2006.pred),]$geometry, add = T)
 
 #NA's coming from 
-dats2006_popwgt.sf
 dats2006_popwgt.states <- st_interpolate_aw( dats2006_popwgt.sf, us_states, extensive = F)
 
-## need to update masking in all functions - cells with centroid not covered are cropped
-##   https://gis.stackexchange.com/questions/255025/r-raster-masking-a-raster-by-polygon-also-remove-cells-partially-covered
-## should probably update usa mask too - need to use USAboundaries for consistency
-SpP_ras <- rasterize(SpP, r, getCover=TRUE)
-SpP_ras[SpP_ras==0] <- NA
+# get usa mask for masking
+# download USA polygon from rnaturalearth
+us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
+mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
 
+#======================================================================#
+## Do the conversions
+#======================================================================#
+states.use <- c( 'PA', 'KY', 'GA', 'WI', 'TX', 'CO', 'CA')
+fstart.idwe <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted'
+fstart.hyads <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/GRIDexposures_byunit_'
 
+saveloc.idwe <- 
+
+# IDWE
+idwe_exp06 <- rbindlist( lapply( 1, #:12, 
+                                 state_exposurer,
+                                 fstart = fstart.idwe,
+                                 year.m = 2006,
+                                 model.dataset = preds.mon.idwe06w05,
+                                 model.name = 'model.cv', #'model.gam'
+                                 name.x = 'idwe',
+                                 mask.use = mask.usa)) #[ mask.usa$state_abbr %in% states.use,]))
+idwe_exp11 <- rbindlist( lapply( 1:12, 
+                                 state_exposurer,
+                                 fstart = fstart.idwe,
+                                 year.m = 2011,
+                                 model.dataset = preds.mon.idwe06w05,
+                                 model.name = 'model.cv', #'model.gam'
+                                 name.x = 'idwe',
+                                 mask.use = mask.usa[ mask.usa$state_abbr %in% c( 'GA', 'KY'),]))
+
+# HyADS
+hyads_exp06 <- rbindlist( lapply( 1:1, 
+                                  state_exposurer,
+                                  fstart = fstart.hyads,
+                                  year.m = 2006,
+                                  model.dataset = preds.mon.hyads06w05,
+                                  model.name = 'model.gam',
+                                  name.x = 'hyads',
+                                  mask.use = mask.usa))
+
+hyads_exp16 <- rbindlist( lapply( 1:12, 
+                                  state_exposurer,
+                                  fstart = fstart.hyads,
+                                  year.m = 2011,
+                                  model.dataset = preds.mon.hyads06w05,
+                                  model.name = 'model.gam',
+                                  name.x = 'hyads',
+                                  mask.use = mask.usa))
+
+## need - find way to calculate for all US
 
 
