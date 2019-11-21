@@ -787,7 +787,7 @@ state_exposurer <- function(
   x.n <- paste0( 'X', names( x.in)[!(names( x.in) %in% c( 'x', 'y'))])
   x.n <- gsub( '^XX', 'X', x.n)
   names( x.r) <- x.n
-  x.proj <-  project_and_stack( dat.s[[1]], x.r[[1:5]], mask.use = mask.use)
+  x.proj <-  project_and_stack( dat.s[[1]], x.r, mask.use = mask.use)
   
   # pick out the appropriate model
   model.use <- model.dataset[ model.name, model.m][[1]]
