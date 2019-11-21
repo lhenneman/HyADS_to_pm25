@@ -696,7 +696,7 @@ month.trainer <- function( name.m = names( mets2005.m)[1],
 project_and_stack <- function( ..., mask.use = NULL){
   list.r <- list( ...)
   for( r in 2: length( list.r)){
-    list.r[[r]] <- projectRaster( list.r[[r]], list.r[[1]])
+    list.r[[r]] <- projectRaster( list.r[[r]], list.r[[1]], alignOnly = F)
   }
   
   # mask over usa
@@ -707,6 +707,7 @@ project_and_stack <- function( ..., mask.use = NULL){
     mask_crop[!is.na( mask_crop)] <- 1
     
     list.out <- lapply( list.r, function( x){
+      x[is.na(x)] <- 0
       trim( mask(x, mask_crop, maskvalue = NA),
             padding = 1)
     })
@@ -786,7 +787,7 @@ state_exposurer <- function(
   x.n <- paste0( 'X', names( x.in)[!(names( x.in) %in% c( 'x', 'y'))])
   x.n <- gsub( '^XX', 'X', x.n)
   names( x.r) <- x.n
-  x.proj <-  project_and_stack( dat.s[[1]], x.r, mask.use = mask.use)
+  x.proj <-  project_and_stack( dat.s[[1]], x.r[[1:5]], mask.use = mask.use)
   
   # pick out the appropriate model
   model.use <- model.dataset[ model.name, model.m][[1]]

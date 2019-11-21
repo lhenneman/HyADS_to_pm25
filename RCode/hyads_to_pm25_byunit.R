@@ -29,7 +29,7 @@ dats2006.r[is.na( dats2006.r)] <- 0
 #======================================================================#
 ## get total state populations
 #======================================================================#
-#grid_popwgt.xyz <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv',
+# grid_popwgt.xyz <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv',
 #                          drop = 'V1')
 
 grid_popwgt.xyz <- fread( '/n/home03/lhenneman/inputdata/census_population/hyads_grid_population.csv',
