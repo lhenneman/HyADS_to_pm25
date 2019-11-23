@@ -785,13 +785,14 @@ state_exposurer <- function(
   dat.s$ID <- mask.r
   
   # read in, remove 
-  x.in1 <- fread( fname, drop = c( 'V1'))[, 1:10]
+  x.in1 <- fread( fname, drop = c( 'V1'))
+  x.in1[is.na( x.in1)] <- 0
+  suppressWarnings( x.in1[, `:=` ( yearmon = NULL, yearmonth = NULL)])
   x.in2 <- x.in1[, colSums(x.in1) != 0, with = F]
   suppressWarnings( x.in2[, `:=` ( x = NULL, y = NULL)])
   x.in <- cbind( x.in1[, .( x, y)], x.in2)
   
   # rasterize new x file
-  suppressWarnings( x.in[, `:=` ( yearmon = NULL, yearmonth = NULL)])
   x.r <- rasterFromXYZ( x.in, crs = p4s)
   x.n <- paste0( 'X', names( x.in)[!(names( x.in) %in% c( 'x', 'y'))])
   x.n <- gsub( '^XX', 'X', x.n)

@@ -1,7 +1,7 @@
 #srun -p test --mem 100g -t 0-06:00 -c 1 -N 1 --pty /bin/bash
 rm( list = ls())
 
-platform <- c( 'mac', 'cannon')[1]
+platform <- c( 'mac', 'cannon')[2]
 do.annual <- FALSE
 
 #coordinate reference system projection string for spatial data
