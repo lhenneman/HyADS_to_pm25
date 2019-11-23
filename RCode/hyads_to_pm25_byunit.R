@@ -186,7 +186,7 @@ array_num <- ifelse( array_num == ''|is.na( array_num), 1, array_num)
 mon <- array_num %% 12
 
 # IDWE
-if( array_num == 1:12){
+if( array_num %in% 1:12){
   idwe_exp06 <- rbindlist( lapply( mon, 
                                    state_exposurer,
                                    fstart = fstart.idwe,
@@ -200,7 +200,7 @@ if( array_num == 1:12){
   write.csv( file = paste0( saveloc.idwe, '2006.csv'), idwe_exp06)
 }
 
-if( array_num == 13:24){
+if( array_num %in% 13:24){
   idwe_exp11 <- rbindlist( lapply( mon, 
                                    state_exposurer,
                                    fstart = fstart.idwe,
@@ -248,26 +248,26 @@ if( array_num %in% 37:48){
 ## Load saved object of cmaq-ddm / hyads models from hyads_to_pm25_month.R
 #======================================================================#
 # load the models 
-hyads.ann.model <- preds.ann.hyads06w05$model.gam
-idwe.ann.model <- preds.ann.idwe06w05$model.gam
+#hyads.ann.model <- preds.ann.hyads06w05$model.gam
+#idwe.ann.model <- preds.ann.idwe06w05$model.gam
 
 # set up the dataset
-dat.coords <- coordinates( dats2006.a)
-dats2006raw.dt <- data.table( cbind( dat.coords, values( dats2006.a)))
-dats2006raw.dt <- data.table( cbind( dat.coords, values( dats2011.a)))
+#dat.coords <- coordinates( dats2006.a)
+#dats2006raw.dt <- data.table( cbind( dat.coords, values( dats2006.a)))
+#dats2006raw.dt <- data.table( cbind( dat.coords, values( dats2011.a)))
 
 # do the predictions
-hyads2006.pred <- predict( hyads.ann.model, newdata = dats2006raw.dt)
-idwe2006.pred <- predict( idwe.ann.model, newdata = dats2006raw.dt)
+#hyads2006.pred <- predict( hyads.ann.model, newdata = dats2006raw.dt)
+#idwe2006.pred <- predict( idwe.ann.model, newdata = dats2006raw.dt)
 
 # rasterize
-dats2006.r <- rasterFromXYZ( data.table( dat.coords, hyads2006.pred, idwe2006.pred), crs = p4s)
-dats2006.r[is.na( dats2006.r)] <- 0
+#dats2006.r <- rasterFromXYZ( data.table( dat.coords, hyads2006.pred, idwe2006.pred), crs = p4s)
+#dats2006.r[is.na( dats2006.r)] <- 0
 #======================================================================#
 ## get total state populations
 #======================================================================#
-grid_popwgt.r <- rasterFromXYZ( grid_popwgt.xyz, crs = p4s)
-grid_popwgt2006.r <- grid_popwgt.r$X2006
+#grid_popwgt.r <- rasterFromXYZ( grid_popwgt.xyz, crs = p4s)
+#grid_popwgt2006.r <- grid_popwgt.r$X2006
 
 #ggplot.a.raster( unstack( grid_popwgt.r), bounds = c( 0, .5e6), facet.names = c( '2006', '2011'))
 
