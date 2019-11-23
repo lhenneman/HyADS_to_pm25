@@ -180,6 +180,8 @@ dats2005.a <- project_and_stack( ddm2005, hyads2005, idwe.a$`2005`,
                                  mets2005, d_nonegu.r, mask.use = mask.usa)
 dats2006.a <- project_and_stack( ddm2006, hyads2006, idwe.a$`2006`, 
                                  mets2006, d_nonegu.r, mask.use = mask.usa)
+dats2011.a <- project_and_stack( ddm2006, hyads2011, idwe.a$`2011`, 
+                                 mets2011, d_nonegu.r, mask.use = mask.usa)
 
 cor( values( dats2005.a), use = 'complete.obs')
 cor( values( dats2006.a), use = 'complete.obs')
@@ -248,7 +250,7 @@ preds.ann.hyads06w05.i <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stac
 # monthly stacks
 # annual model
 # monthly models
-save( dats2005.a, dats2006.a,
+save( dats2005.a, dats2006.a, dats2011.a,
       hyads.m.all, ddm.m.all, mets.m.all,
       idwe.m, d_nonegu.r,
       preds.mon.hyads06w05, #preds.mon.hyads05w06,

@@ -734,14 +734,15 @@ state_exposurer <- function(
   model.dataset = preds.mon.idwe06w05,
   model.name = 'model.cv', #'model.gam'
   name.x = 'idwe',
-  mask.use = mask.usa[ mask.usa$state_abbr %in% c( 'GA', 'KY'),],
+  mask.use = mask.usa,
   ddm.m = ddm.m.all,
   mets.m = mets.m.all,
   emiss.m = d_nonegu.r,
   idwe.m. = idwe.m,
   hyads.m = hyads.m.all,
   grid_pop.r = grid_popwgt.r,
-  state_pops = copy( us_states.pop.dt)
+  state_pops = copy( us_states.pop.dt),
+  take.diff = F
 ){
   message( paste( 'Converting', month.name[month.n]))
   
@@ -753,8 +754,11 @@ state_exposurer <- function(
   
   if( name.x == 'idwe'){
     fname <- paste0( fstart, year.m, '_', month.n, '.csv')
-  } else
+    name.dat <- 'idwe'
+  } else{
     fname <- paste0( fstart, year.m, '_', month.N, '.csv')
+    name.dat <- 'hyads'
+  }
   
   # create prediction dataset
   # ddm.use.p <- ddm.m[[name.m]]
@@ -780,8 +784,13 @@ state_exposurer <- function(
   mask.a <- levels( mask.r)[[1]]
   dat.s$ID <- mask.r
   
-  # read in, rasterize new x file
-  x.in <- fread( fname, drop = c( 'V1'))
+  # read in, remove 
+  x.in1 <- fread( fname, drop = c( 'V1'))[, 1:10]
+  x.in2 <- x.in1[, colSums(x.in1) != 0, with = F]
+  suppressWarnings( x.in2[, `:=` ( x = NULL, y = NULL)])
+  x.in <- cbind( x.in1[, .( x, y)], x.in2)
+  
+  # rasterize new x file
   suppressWarnings( x.in[, `:=` ( yearmon = NULL, yearmonth = NULL)])
   x.r <- rasterFromXYZ( x.in, crs = p4s)
   x.n <- paste0( 'X', names( x.in)[!(names( x.in) %in% c( 'x', 'y'))])
@@ -792,16 +801,27 @@ state_exposurer <- function(
   # pick out the appropriate model
   model.use <- model.dataset[ model.name, model.m][[1]]
   
+  # predict the base scenario (zero hyads/idwe)
+  dat.use0<- copy( dat.s)
+  dat.use0[[name.dat]] <- 0
+  dat.coords <- coordinates( dat.s)
+  dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
+  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  # dat.pred0c <-  predict( model.use, newdata = dat_raw0.dt, type = 'terms')
+  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
+  # dats0.rc <- rasterFromXYZ( data.table( dat.coords, dat.pred0c), crs = p4s)
+  
   # do the predictions
   pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
   pred_popwgt.r <- brick( lapply( x.n, function( n){
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
-    dat.use[[name.x]] <- x.proj[[n]]
+    # print(n)
+    # print(dat.use[[name.dat]])
+    dat.use[[name.dat]] <- x.proj[[n]]
     
     # set up the dataset
-    dat.coords <- coordinates( dat.use)
     dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
     
     # do the predictions
@@ -810,12 +830,18 @@ state_exposurer <- function(
     # rasterize
     dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
     
-    # multiply by population
-    dats.r <- dats.r * dat.use[['pop']]
+    #take difference from base
+    if( take.diff){
+      dats.r2 <- dats.r - dats0.r
+    } else 
+      dats.r2 <- dats.r
     
-    names( dats.r) <- n
+    # multiply by population
+    dats.r3 <- dats.r2 * dat.use[['pop']]
+    
+    names( dats.r3) <- n
     setTxtProgressBar(pb, which( x.n == n))
-    return( dats.r)
+    return( dats.r3)
   }))
   close( pb)
   
@@ -845,6 +871,124 @@ state_exposurer <- function(
   pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
                           month = name.Date)]
   
-  return( pred_popwgt.out[, .( state_abbr, uID, month, popwgt)])
+  return( pred_popwgt.out[, .( state_abbr, uID, month, mean_popwgt, pop_amnt, popwgt)])
+}
+
+#======================================================================#
+## same as above, but for a year
+#======================================================================#
+state_exposurer.year <- function( 
+  fname,
+  year.m = 2006,
+  model.use = preds.ann.hyads06w05$model.gam,
+  name.x = 'idwe',
+  mask.use = mask.usa,
+  dat.a = dats2006.a,
+  grid_pop.r = grid_popwgt.r,
+  state_pops = copy( us_states.pop.dt),
+  take.diff = F
+){
+  message( paste( 'Converting', year.m))
+  
+  # rename population raster
+  popyr.name <- paste0( 'X', year.m)
+  grid_pop.r <- grid_pop.r[[popyr.name]]
+  names( grid_pop.r) <- 'pop'
+  
+  # assign state names to raster
+  mask.r <- rasterize( mask.use[,'state_abbr'], dat.a[[1]])
+  mask.a <- levels( mask.r)[[1]]
+  dat.a$ID <- mask.r
+  dat.a <- project_and_stack( dat.a, grid_pop.r)
+  
+  # read in, rasterize new x file
+  if( name.x == 'hyads'){
+    x.in <- fread( fname, drop = c( 'V1', 'year.E', 'year.H'))
+    x.cast <- dcast( x.in, x + y ~ uID, value.var = 'hyads')
+    name.dat <- 'hyads'
+  }
+  if( name.x == 'idwe'){
+    x.cast <- fread( fname, drop = c( 'V1'))
+    name.dat <- 'tot.sum'
+  }
+  
+  # cast and rasterize
+  x.r <- rasterFromXYZ( x.cast, crs = p4s)
+  x.n <- paste0( 'X', names( x.cast)[!(names( x.cast) %in% c( 'x', 'y'))])
+  x.n <- gsub( '^XX', 'X', x.n)
+  names( x.r) <- x.n
+  x.proj <-  project_and_stack( dat.a[[1]], x.r, mask.use = mask.use)
+  
+  # predict the base scenario (zero hyads/idwe)
+  dat.use0<- copy( dat.a)
+  dat.use0[[name.dat]] <- 0
+  dat.coords <- coordinates( dat.a)
+  dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
+  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  # dat.pred0c <-  predict( model.use, newdata = dat_raw0.dt, type = 'terms')
+  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
+  # dats0.rc <- rasterFromXYZ( data.table( dat.coords, dat.pred0c), crs = p4s)
+  
+  # do the predictions
+  pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
+  pred_popwgt.r <- brick( parallel::mclapply( x.n, function( n){
+    gc()
+    # assign unit to prediction dataset
+    dat.use <- copy( dat.a)
+    # print(n)
+    # print(dat.use[[name.dat]])
+    dat.use[[name.dat]] <- x.proj[[n]]
+    
+    # set up the dataset
+    dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
+    
+    # do the predictions
+    dat.pred <- predict( model.use, newdata = dat_raw.dt)
+    
+    # rasterize
+    dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
+    
+    #take difference from base
+    if( take.diff){
+      dats.r2 <- dats.r - dats0.r
+    } else 
+      dats.r2 <- dats.r
+    
+    # multiply by population
+    dats.r3 <- dats.r2 * dat.use[['pop']]
+    
+    names( dats.r3) <- n
+    setTxtProgressBar(pb, which( x.n == n))
+    return( dats.r3)
+  }))
+  close( pb)
+  
+  # calculate population-weighted by state
+  pred_popwgt.r$ID <- mask.r
+  pred_popwgt.dt <- data.table( values( pred_popwgt.r))
+  pred_popwgt.dt.m <- na.omit( melt( pred_popwgt.dt, id.vars = 'ID', variable.name = 'uID'))
+  pred_popwgt.dt.s <- pred_popwgt.dt.m[, .( mean_popwgt = sum( value)), by = .( ID, uID)]
+  
+  # now just divide by each state's total population
+  setnames( state_pops, popyr.name, 'pop_amnt')
+  
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, state_pops[, .( state_abbr, pop_amnt)],
+                             by = 'state_abbr')
+  
+  #calculate pop-weighted for the entire domain
+  pred_popwgt.dt.all <- pred_popwgt.dt.m[, .( mean_popwgt = mean( value)), by = .( uID)]
+  pop.tot <- sum( state_pops$pop_amnt)
+  pred_popwgt.dt.all[, `:=` (pop_amnt = pop.tot,
+                             ID = 100,
+                             state_abbr = 'US')]
+  
+  #merge state and total datasets
+  pred_popwgt.out <- rbind( pred_popwgt.dt.s, pred_popwgt.dt.all)
+  
+  pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
+                          year = year.m)]
+  
+  return( pred_popwgt.out[, .( state_abbr, uID, year, mean_popwgt, pop_amnt, popwgt)])
 }
 

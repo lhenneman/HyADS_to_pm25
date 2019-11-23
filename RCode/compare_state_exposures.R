@@ -427,17 +427,30 @@ exp_home <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/PopWeighted'
 # IDWE
 idwe_2006 <- fread( file.path( exp_home, 'popwgt_idwe2006.csv'), drop = 'V1')
 idwe_2011 <- fread( file.path( exp_home, 'popwgt_idwe2011.csv'), drop = 'V1')
+idwe_all <- rbind( idwe_2006, idwe_2011)
+setnames( idwe_all, 'popwgt', 'idwe')
 
 # HyADS
 hyads_2006 <- rbindlist( lapply( 1:12, function( x)
   fread( file.path( exp_home, paste0( 'popwgt_hyads2006_', x, '.csv')), drop = 'V1')))
-hyads_2011 <- rbindlist( lapply( 1:12, function( x)
+hyads_2011 <- rbindlist( lapply( c( 1:4, 6:12), function( x)
   fread( file.path( exp_home, paste0( 'popwgt_hyads2011_', x, '.csv')), drop = 'V1')))
+hyads_all <- rbind( hyads_2006, hyads_2011)
+setnames( hyads_all, 'popwgt', 'hyads')
 
+# combine, limit to input states
+states.use <- c( 'PA', 'KY', 'GA', 'WI', 'TX', 'CO', 'CA')
+rcm_exp <- merge( idwe_all, hyads_all, by = c( 'state_abbr', 'uID',  'month'), 
+                  all = T)[ state_abbr %in% states.use]
+rcm_exp[, uID := gsub( '^X', '', uID)]
+
+ggplot( data = rcm_exp[ state_abbr %in% states.use & month == '2006-07-01']) +
+  geom_point( aes( x = hyads, y = idwe)) +
+  facet_grid( month ~ state_abbr, scales = 'free')
 ## =========================================================== ##
 ## Merge adjoint and HyADS/dist
 ## =========================================================== ##
-ranks_adj_all <- merge( ranks_all_state[,   V1 := NULL], adjoint_all,
+ranks_adj_all <- merge( adjoint_all_pop, rcm_exp,
                         by = c( "uID", "year", "state"),
                         all = T)
 ranks_adj_all[, state.factor := factor(`state`, levels =  c( 'US', 'PA', 'KY', 'GA', 'NY', 'WI', 'TX', 'CO', 'CA'))]
