@@ -198,7 +198,7 @@ if( array_num %in% 1:12){
                                    mask.use = mask.usa,
                                    take.diff = T)) #[ mask.usa$state_abbr %in% states.use,]))
   
-  write.csv( file = paste0( saveloc.idwe, '2006.csv'), idwe_exp06)
+  write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '.csv'), idwe_exp06)
 }
 
 if( array_num %in% 13:24){
@@ -211,7 +211,7 @@ if( array_num %in% 13:24){
                                    name.x = 'idwe',
                                    mask.use = mask.usa,
                                    take.diff = T))
-  write.csv( file = paste0( saveloc.idwe, '2011.csv'), idwe_exp11)
+  write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '.csv'), idwe_exp11)
 }
 
 if( array_num %in% 25:36){
