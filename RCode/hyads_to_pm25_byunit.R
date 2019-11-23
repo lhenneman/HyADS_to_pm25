@@ -184,6 +184,7 @@ if( do.annual){
 array_num <- as.numeric( Sys.getenv("SLURM_ARRAY_TASK_ID"))
 array_num <- ifelse( array_num == ''|is.na( array_num), 1, array_num)
 mon <- array_num %% 12
+mon <- ifelse( mon == 0, 12, mon)
 
 # IDWE
 if( array_num %in% 1:12){
