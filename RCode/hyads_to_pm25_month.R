@@ -141,16 +141,12 @@ names( idwe.m) <- names( hyads.m.all)
 ## ========================================================= ##
 ##                SOx inverse distance by year
 ## ========================================================= ##
-idwe.m.dt[, dates := as.Date( paste0( gsub( '_.*', '', yearmon), '_',
-                                      formatC( as.numeric( gsub( '.*_', '', yearmon)), width = 2, flag = '0'),
-                                      '_01'), 
-                              format = '%Y_%m_%d')]
-idwe.m.dt[, days := days_in_month( dates)]
-idwe.dt <- idwe.m.dt[, .( tot.sum = sum( tot.sum * days) / 365), by = .( x, y, year( dates))]
-idwe.a.l <- split( idwe.dt, by = 'year')
-
-idwe.a <- lapply( idwe.a.l, IDWErasterizer)
-names( idwe.a) <- unique( idwe.dt$year)
+idwe2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2005_total.csv', drop = 'V1')
+idwe2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2006_total.csv', drop = 'V1')
+idwe2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2011_total.csv', drop = 'V1')
+idwe2005 <- rasterFromXYZ( idwe2005.dt, crs = p4s)
+idwe2006 <- rasterFromXYZ( idwe2006.dt, crs = p4s)
+idwe2011 <- rasterFromXYZ( idwe2011.dt, crs = p4s)
 
 ## ========================================================= ##
 ##                Plots
@@ -176,11 +172,11 @@ plot(mask.usa, add = T)
 #======================================================================#
 # stack up and project annual data
 #======================================================================#
-dats2005.a <- project_and_stack( ddm2005, hyads2005, idwe.a$`2005`, 
+dats2005.a <- project_and_stack( ddm2005, hyads2005, idwe2005, 
                                  mets2005, d_nonegu.r, mask.use = mask.usa)
-dats2006.a <- project_and_stack( ddm2006, hyads2006, idwe.a$`2006`, 
+dats2006.a <- project_and_stack( ddm2006, hyads2006, idwe2006, 
                                  mets2006, d_nonegu.r, mask.use = mask.usa)
-dats2011.a <- project_and_stack( ddm2006, hyads2011, idwe.a$`2011`, 
+dats2011.a <- project_and_stack( ddm2006, hyads2011, idwe2011, 
                                  mets2011, d_nonegu.r, mask.use = mask.usa)
 
 cor( values( dats2005.a), use = 'complete.obs')
