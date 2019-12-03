@@ -90,11 +90,11 @@ if( do.annual){
   write.csv( file = paste0( saveloc.hyads, '_annual2011.csv'), hyads_11a)
   
   idwe_06a <- state_exposurer.year( fname = fname2011.idwe,
-                                    year.m = 2011,
+                                    year.m = 2006,
                                     model.use = preds.ann.idwe06w05$model.cv,
                                     name.x = 'idwe',
                                     mask.use = mask.usa,
-                                    dat.a = dats2011.a,
+                                    dat.a = dats2006.a,
                                     grid_pop.r = grid_popwgt.r,
                                     state_pops = copy( us_states.pop.dt))
   write.csv( file = paste0( saveloc.idwe, '_annual2006.csv'), idwe_06a)
