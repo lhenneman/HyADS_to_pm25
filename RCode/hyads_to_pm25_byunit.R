@@ -1,8 +1,9 @@
 #srun -p test --mem 100g -t 0-06:00 -c 1 -N 1 --pty /bin/bash
 rm( list = ls())
 
-platform <- c( 'mac', 'cannon')[2]
+platform <- c( 'mac', 'cannon')[1]
 do.annual <- FALSE
+do.xb <- TRUE
 
 #coordinate reference system projection string for spatial data
 p4s <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000"
@@ -10,6 +11,8 @@ p4s <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000
 if( platform == 'mac'){
   source( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
   load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models.RData')
+  if( do.xb)
+    load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models_xg.RData')
   grid_popwgt.xyz <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv',
                             drop = 'V1')
   fstart.idwe <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted'
@@ -176,6 +179,61 @@ if( do.annual){
                                          state_pops = copy( us_states.pop.dt),
                                          take.diff = T)
   write.csv( file = paste0( saveloc.idwe, '_annual_diffgam2011.csv'), idwe_11a.dgam)
+  
+}
+
+#======================================================================#
+## Do the annual conversions with xboost
+#======================================================================#
+if( do.xb){
+  hyads_06a_xb <- state_exposurer.year( fname = fname2006.hyads,
+                                        year.m = 2006,
+                                        model.use = preds.ann.xgboost06w05$model.xg,
+                                        name.x = 'hyads',
+                                        mask.use = mask.usa,
+                                        dat.a = dats2006.a,
+                                        grid_pop.r = grid_popwgt.r,
+                                        state_pops = copy( us_states.pop.dt),
+                                        take.diff = T,
+                                        xboost = T)
+  write.csv( file = paste0( saveloc.hyads, '_annual2006_xb.csv'), hyads_06a_xb)
+  
+  hyads_11a_xb <- state_exposurer.year( fname = fname2011.hyads,
+                                        year.m = 2011,
+                                        model.use = preds.ann.xgboost06w05$model.xg,
+                                        name.x = 'hyads',
+                                        mask.use = mask.usa,
+                                        dat.a = dats2011.a,
+                                        grid_pop.r = grid_popwgt.r,
+                                        state_pops = copy( us_states.pop.dt),
+                                        take.diff = T,
+                                        xboost = T)
+  write.csv( file = paste0( saveloc.hyads, '_annual2011_xb.csv'), hyads_11a_xb)
+  
+  idwe_06a_xb <- state_exposurer.year( fname = fname2011.idwe,
+                                       year.m = 2011,
+                                       model.use = preds.ann.xgboost06w05$model.xg,
+                                       name.x = 'idwe',
+                                       mask.use = mask.usa,
+                                       dat.a = dats2011.a,
+                                       grid_pop.r = grid_popwgt.r,
+                                       state_pops = copy( us_states.pop.dt),
+                                       take.diff = T,
+                                       xboost = T)
+  write.csv( file = paste0( saveloc.idwe, '_annual2006_xb.csv'), idwe_06a_xb)
+  
+  idwe_11a_xb <- state_exposurer.year( fname = fname2011.idwe,
+                                       year.m = 2011,
+                                       model.use = preds.ann.xgboost06w05$model.xg,
+                                       name.x = 'idwe',
+                                       mask.use = mask.usa,
+                                       dat.a = dats2011.a,
+                                       grid_pop.r = grid_popwgt.r,
+                                       state_pops = copy( us_states.pop.dt),
+                                       take.diff = T,
+                                       xboost = T)
+  write.csv( file = paste0( saveloc.idwe, '_annual2011_xb.csv'), idwe_11a_xb)
+  
   
 }
 #======================================================================#

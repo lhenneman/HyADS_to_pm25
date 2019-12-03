@@ -6,6 +6,8 @@ library( ggplot2)
 library( viridis)
 library( lubridate)
 library( mgcv)
+library( xgboost)
+library( pbmcapply)
 
 `%ni%` <- Negate(`%in%`) 
 
@@ -887,7 +889,8 @@ state_exposurer.year <- function(
   dat.a = dats2006.a,
   grid_pop.r = grid_popwgt.r,
   state_pops = copy( us_states.pop.dt),
-  take.diff = F
+  take.diff = F,
+  xboost = F
 ){
   message( paste( 'Converting', year.m))
   
@@ -925,14 +928,20 @@ state_exposurer.year <- function(
   dat.use0[[name.dat]] <- 0
   dat.coords <- coordinates( dat.a)
   dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
-  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
-  # dat.pred0c <-  predict( model.use, newdata = dat_raw0.dt, type = 'terms')
+  
+  # xboost requires special treatment
+  if( xboost){
+    dat_raw0.dt.trim <- dat_raw0.dt[, model.use$feature_names, with = F]
+    xhold1c <- xgb.DMatrix( as.matrix( dat_raw0.dt.trim))
+    dat.pred0 <- predict( model.use, newdata = xhold1c)
+  } else
+    dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
-  # dats0.rc <- rasterFromXYZ( data.table( dat.coords, dat.pred0c), crs = p4s)
   
   # do the predictions
-  pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
-  pred_popwgt.r <- brick( parallel::mclapply( x.n, function( n){
+  # pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
+  pred_popwgt.r <- brick( pbmcapply::pbmclapply( x.n, function( n){
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.a)
@@ -944,7 +953,12 @@ state_exposurer.year <- function(
     dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
     
     # do the predictions
-    dat.pred <- predict( model.use, newdata = dat_raw.dt)
+    if( xboost){
+      dat_raw.dt.trim <- dat_raw.dt[, model.use$feature_names, with = F]
+      xhold.pred <- xgb.DMatrix( as.matrix( dat_raw.dt.trim))
+      dat.pred <- predict( model.use, newdata = xhold.pred)
+    } else
+      dat.pred <- predict( model.use, newdata = dat_raw.dt)
     
     # rasterize
     dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
@@ -959,10 +973,10 @@ state_exposurer.year <- function(
     dats.r3 <- dats.r2 * dat.use[['pop']]
     
     names( dats.r3) <- n
-    setTxtProgressBar(pb, which( x.n == n))
+    # setTxtProgressBar(pb, which( x.n == n))
     return( dats.r3)
   }))
-  close( pb)
+  # close( pb)
   
   # calculate population-weighted by state
   pred_popwgt.r$ID <- mask.r
