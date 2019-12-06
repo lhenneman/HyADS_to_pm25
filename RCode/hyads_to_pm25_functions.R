@@ -913,7 +913,7 @@ state_exposurer.year <- function(
   }
   if( name.x == 'idwe'){
     x.cast <- fread( fname, drop = c( 'V1'))
-    name.dat <- 'tot.sum'
+    name.dat <- 'idwe'
   }
   
   # cast and rasterize
@@ -941,13 +941,15 @@ state_exposurer.year <- function(
   
   # do the predictions
   # pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
-  pred_popwgt.r <- brick( pbmcapply::pbmclapply( x.n, function( n){
+  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n, function( n){ #pbmcapply::pbmc
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.a)
-    # print(n)
-    # print(dat.use[[name.dat]])
     dat.use[[name.dat]] <- x.proj[[n]]
+    
+    # if zero impacts, return raster with only zeros
+    if( sum( values(x.proj[[n]]), na.rm = T) == 0)
+      return( x.proj[[n]])
     
     # set up the dataset
     dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
@@ -969,14 +971,26 @@ state_exposurer.year <- function(
     } else 
       dats.r2 <- dats.r
     
-    # multiply by population
-    dats.r3 <- dats.r2 * dat.use[['pop']]
-    
-    names( dats.r3) <- n
-    # setTxtProgressBar(pb, which( x.n == n))
-    return( dats.r3)
+    names( dats.r2) <- n
+    return( dats.r2)
   }))
   # close( pb)
+  
+  # calculate raw average by state
+  pred_pm.r$ID <- mask.r
+  pred_pm.dt <- data.table( values( pred_pm.r))
+  pred_pm.dt.m <- na.omit( melt( pred_pm.dt, id.vars = 'ID', variable.name = 'uID'))
+  pred_pm.dt.s <- pred_pm.dt.m[, .( mean_pm = mean( value)), by = .( ID, uID)]
+  pred_pm.dt.s <- merge( pred_pm.dt.s, mask.a, by = 'ID')
+  
+  #calculate raw average for the entire domain
+  pred_pm.dt.all <- pred_pm.dt.m[, .( mean_pm = mean( value)), by = .( uID)]
+  pred_pm.dt.all[, `:=` (ID = 100, state_abbr = 'US')]
+  pred_pm <- rbind( pred_pm.dt.s, pred_pm.dt.all)
+  
+  # multiply by population
+  pred_popwgt.r <- pred_pm.r * dat.a[['pop']]
+  names( pred_popwgt.r) <- names( pred_pm.r)
   
   # calculate population-weighted by state
   pred_popwgt.r$ID <- mask.r
@@ -986,7 +1000,6 @@ state_exposurer.year <- function(
   
   # now just divide by each state's total population
   setnames( state_pops, popyr.name, 'pop_amnt')
-  
   pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
   pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, state_pops[, .( state_abbr, pop_amnt)],
                              by = 'state_abbr')
@@ -1001,9 +1014,13 @@ state_exposurer.year <- function(
   #merge state and total datasets
   pred_popwgt.out <- rbind( pred_popwgt.dt.s, pred_popwgt.dt.all)
   
+  # divide by total population
   pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
                           year = year.m)]
   
-  return( pred_popwgt.out[, .( state_abbr, uID, year, mean_popwgt, pop_amnt, popwgt)])
+  # merge pop-weighted and raw dataset
+  out <- merge( pred_popwgt.out, pred_pm, by = c( 'state_abbr', 'ID', 'uID'))
+  
+  return( list( popwgt_states = out, pred_pm.r = pred_pm.r, zero_out.r = dats0.r))
 }
 

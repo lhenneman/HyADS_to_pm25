@@ -381,7 +381,7 @@ adjoint_all_pop[, adj_popwgt := `SOx exposure` / pop]
 ## adjoint variability between plume assumptions
 ## =========================================================== ##
 adj.variability.name <- adjoint_all_pop[ , sum( adj_popwgt), 
-                                         by = .( adj.name, year, state)][state == 'US' & year == 2006]
+                                         by = .( adj.name, year, state)]#[state == 'US' & year == 2006]
 adj.variability.name[, fract.V1 := V1 / min(V1)]
 
 adj.variability.year <- adjoint_all_pop[ , sum( `adj_popwgt`), 
@@ -398,16 +398,16 @@ exp_home_annual <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData'
 dropcols <- c( 'V1', 'mean_popwgt', 'pop_amnt')
 
 # IDWE
-idwe_2006 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diffgam2006.csv'), drop = dropcols)
-idwe_2011 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diffgam2011.csv'), drop = dropcols)
+idwe_2006 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diff2006_2.csv'), drop = dropcols)
+idwe_2011 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diff2011_2.csv'), drop = dropcols)
 idwe_all <- rbind( idwe_2006, idwe_2011)[uID != 'Xtot.sum']
-setnames( idwe_all, 'popwgt', 'idwe')
+setnames( idwe_all, c( 'popwgt', 'mean_pm'), c( 'idwe.pw', 'idwe.mean'))
 
 # HyADS
-hyads_2006 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2006.csv'), drop = dropcols)
-hyads_2011 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2011.csv'), drop = dropcols)
+hyads_2006 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2006_2.csv'), drop = dropcols)
+hyads_2011 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2011_2.csv'), drop = dropcols)
 hyads_all <- rbind( hyads_2006, hyads_2011)
-setnames( hyads_all, 'popwgt', 'hyads')
+setnames( hyads_all, c( 'popwgt', 'mean_pm'), c( 'hyads.pw', 'hyads.mean'))
 
 # hyads xgboost
 hyadsx_2006 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual2006_xb.csv'), drop = dropcols)
@@ -423,10 +423,11 @@ setnames( idwex_all, 'popwgt', 'idwex')
 
 # combine, limit to input states
 states.use <- c( 'PA', 'KY', 'GA', 'WI', 'TX', 'CO', 'CA', 'US')
-rcm_exp <- Reduce(function(...) merge(..., all = TRUE, by = c( 'state_abbr', 'uID', 'year')), 
-                  list( idwe_all, hyads_all, hyadsx_all, idwex_all))[ state_abbr %in% states.use]
+rcm_exp <- Reduce(function(...) merge(..., all = TRUE, by = c( 'state_abbr', 'uID', 'year', 'ID')), 
+                  list( idwe_all, hyads_all))[ state_abbr %in% states.use]
 rcm_exp[, uID := gsub( '^X', '', uID)]
 setnames( rcm_exp, 'state_abbr', 'state')
+
 
 ggplot( data = rcm_exp[ state %in% states.use]) +
   geom_point( aes( x = hyads, y = idwe, color = year)) + 
@@ -441,14 +442,49 @@ ranks_adj_all <- merge( adjoint_all_pop, rcm_exp,
 ranks_adj_all[, state.factor := factor(`state`, levels =  c( 'US', 'PA', 'KY', 'GA', 'NY', 'WI', 'TX', 'CO', 'CA'))]
 
 # not looking at the ones with zero
-ranks_adj_all <- ranks_adj_all[ idwe != 0 & hyads != 0]
+ranks_adj_all <- ranks_adj_all[ uID != 'tot.sum']
 
 # rank hyads and idwe
-ranks_adj_all[, `:=` ( hyads.rank  = frankv( `hyads`, order = -1),
-                       idwe.rank   = frankv( `idwe`, order = -1),
-                       hyadsx.rank  = frankv( `hyadsx`, order = -1),
-                       idwex.rank   = frankv( `idwex`, order = -1)),
-              by = .( year, state)]
+# ranks_adj_all[, `:=` ( hyads.rank  = frankv( `hyads`, order = -1),
+#                        idwe.rank   = frankv( `idwe`, order = -1),
+#                        hyadsx.rank  = frankv( `hyadsx`, order = -1),
+#                        idwex.rank   = frankv( `idwex`, order = -1)),
+#               by = .( year, state, adj.name)]
+
+## =========================================================== ##
+## Total contributions to each state - how do they compare to CMAQ-DDM?
+## =========================================================== ##
+# sum by states
+rcm_statesums <- na.omit( ranks_adj_all[ adj.name == 'initial'])[, 
+                                         .( adj.pw = sum( adj_popwgt),
+                                              idwe.pw    = sum( idwe.pw),
+                                              idwe.mean  = sum( idwe.mean),
+                                              hyads.pw   = sum( hyads.pw),
+                                              hyads.mean = sum( hyads.mean)),
+                                         by = c( 'state', 'year')]
+
+# load CMAQ data
+load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models2.RData')
+
+# grid-weighted population as raster
+ddm2006.sf <- st_as_sf( rasterToPolygons( dats2006.a$cmaq.ddm))
+ddm2011.sf <- st_as_sf( rasterToPolygons( dats2011.a$cmaq.ddm))
+
+# get total state populations
+us_states <- st_transform( USAboundaries::us_states(), p4s)
+ddm2006.states <- data.table( st_interpolate_aw( ddm2006.sf, us_states, extensive = F))
+ddm2011.states <- data.table( st_interpolate_aw( ddm2011.sf, us_states, extensive = F))
+
+# merge together
+ddm2006.states[, `:=` ( year = 2006, state = us_states$state_abbr[Group.1], Group.1 = NULL, geometry = NULL)]
+ddm2011.states[, `:=` ( year = 2011, state = us_states$state_abbr[Group.1], Group.1 = NULL, geometry = NULL)]
+ddm.states <- rbind( ddm2006.states, ddm2011.states)
+rcm_statesums <- merge( rcm_statesums, ddm.states, by = c( 'state', 'year'))
+
+# load in model fits
+modfits.annual <- fread( "~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/annual_fields_hyads_idwe.csv", drop = 'V1')
+modfits.annual.c <- dcast( modfits.annual, x + y + year ~ field, value.var = 'layer')
+
 
 ## =========================================================== ##
 ## Mkae plots

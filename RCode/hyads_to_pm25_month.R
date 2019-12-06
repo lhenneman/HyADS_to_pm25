@@ -147,6 +147,9 @@ idwe2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_
 idwe2005 <- rasterFromXYZ( idwe2005.dt, crs = p4s)
 idwe2006 <- rasterFromXYZ( idwe2006.dt, crs = p4s)
 idwe2011 <- rasterFromXYZ( idwe2011.dt, crs = p4s)
+names( idwe2005) <- 'idwe'
+names( idwe2006) <- 'idwe'
+names( idwe2011) <- 'idwe'
 
 ## ========================================================= ##
 ##                Plots
@@ -178,6 +181,7 @@ dats2006.a <- project_and_stack( ddm2006, hyads2006, idwe2006,
                                  mets2006, d_nonegu.r, mask.use = mask.usa)
 dats2011.a <- project_and_stack( ddm2006, hyads2011, idwe2011, 
                                  mets2011, d_nonegu.r, mask.use = mask.usa)
+dats2011.a$cmaq.ddm <- NA
 
 cor( values( dats2005.a), use = 'complete.obs')
 cor( values( dats2006.a), use = 'complete.obs')
@@ -224,20 +228,20 @@ preds.mon.idwe05w06  <- mapply( month.trainer, names( mets2006.m), names( mets20
                                                  .mask.use = mask.usa, cov.names = cov.names))
 
 # predict annual 2006 using model trained in 2005
-preds.ann.hyads06w05 <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, 
+preds.ann.hyads06w05 <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, name.idwe = 'idwe',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
-preds.ann.idwe06w05  <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, x.name = 'tot.sum',
+preds.ann.idwe06w05  <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, name.idwe = 'idwe', x.name = 'idwe',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 
 # predict annual 2006 using model trained in 2005
-preds.ann.hyads05w06 <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a,
+preds.ann.hyads05w06 <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, name.idwe = 'idwe',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
-preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, x.name = 'tot.sum',
+preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, name.idwe = 'idwe', x.name = 'idwe',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 
 # predict annual 2006 using model trained in 2005 - include inverse distance
 preds.ann.hyads06w05.i <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, 
-                                              ho.frac = 0, covars.names = c( cov.names, 'tot.sum'), return.mods = T)
+                                              ho.frac = 0, covars.names = c( cov.names, 'idwe'), return.mods = T)
 
 #======================================================================#
 ## Save data
@@ -253,7 +257,7 @@ save( dats2005.a, dats2006.a, dats2011.a,
       preds.mon.idwe06w05,  #preds.mon.idwe05w06,
       preds.ann.hyads06w05, #preds.ann.hyads05w06,
       preds.ann.idwe06w05,  #preds.ann.idwe05w06,
-      file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models.RData')
+      file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models2.RData')
 
 
 # do correlation comparisons on quintiles

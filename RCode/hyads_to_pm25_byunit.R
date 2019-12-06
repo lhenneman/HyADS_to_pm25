@@ -2,15 +2,15 @@
 rm( list = ls())
 
 platform <- c( 'mac', 'cannon')[1]
-do.annual <- FALSE
-do.xb <- TRUE
+do.annual <- TRUE
+do.xb <- FALSE
 
 #coordinate reference system projection string for spatial data
 p4s <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000"
 
 if( platform == 'mac'){
   source( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
-  load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models.RData')
+  load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models2.RData')
   if( do.xb)
     load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models_xg.RData')
   grid_popwgt.xyz <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv',
@@ -69,45 +69,45 @@ mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names
 #======================================================================#
 # annual
 if( do.annual){
-  hyads_06a <- state_exposurer.year( fname = fname2006.hyads,
-                                     year.m = 2006,
-                                     model.use = preds.ann.hyads06w05$model.gam,
-                                     name.x = 'hyads',
-                                     mask.use = mask.usa,
-                                     dat.a = dats2006.a,
-                                     grid_pop.r = grid_popwgt.r,
-                                     state_pops = copy( us_states.pop.dt))
-  write.csv( file = paste0( saveloc.hyads, '_annual2006.csv'), hyads_06a)
-  
-  hyads_11a <- state_exposurer.year( fname = fname2011.hyads,
-                                     year.m = 2011,
-                                     model.use = preds.ann.hyads06w05$model.gam,
-                                     name.x = 'hyads',
-                                     mask.use = mask.usa,
-                                     dat.a = dats2011.a,
-                                     grid_pop.r = grid_popwgt.r,
-                                     state_pops = copy( us_states.pop.dt))
-  write.csv( file = paste0( saveloc.hyads, '_annual2011.csv'), hyads_11a)
-  
-  idwe_06a <- state_exposurer.year( fname = fname2011.idwe,
-                                    year.m = 2006,
-                                    model.use = preds.ann.idwe06w05$model.cv,
-                                    name.x = 'idwe',
-                                    mask.use = mask.usa,
-                                    dat.a = dats2006.a,
-                                    grid_pop.r = grid_popwgt.r,
-                                    state_pops = copy( us_states.pop.dt))
-  write.csv( file = paste0( saveloc.idwe, '_annual2006.csv'), idwe_06a)
-  
-  idwe_11a <- state_exposurer.year( fname = fname2011.idwe,
-                                    year.m = 2011,
-                                    model.use = preds.ann.idwe06w05$model.cv,
-                                    name.x = 'idwe',
-                                    mask.use = mask.usa,
-                                    dat.a = dats2011.a,
-                                    grid_pop.r = grid_popwgt.r,
-                                    state_pops = copy( us_states.pop.dt))
-  write.csv( file = paste0( saveloc.idwe, '_annual2011.csv'), idwe_11a)
+  # hyads_06a <- state_exposurer.year( fname = fname2006.hyads,
+  #                                    year.m = 2006,
+  #                                    model.use = preds.ann.hyads06w05$model.gam,
+  #                                    name.x = 'hyads',
+  #                                    mask.use = mask.usa,
+  #                                    dat.a = dats2006.a,
+  #                                    grid_pop.r = grid_popwgt.r,
+  #                                    state_pops = copy( us_states.pop.dt))
+  # write.csv( file = paste0( saveloc.hyads, '_annual2006.csv'), hyads_06a)
+  # 
+  # hyads_11a <- state_exposurer.year( fname = fname2011.hyads,
+  #                                    year.m = 2011,
+  #                                    model.use = preds.ann.hyads06w05$model.gam,
+  #                                    name.x = 'hyads',
+  #                                    mask.use = mask.usa,
+  #                                    dat.a = dats2011.a,
+  #                                    grid_pop.r = grid_popwgt.r,
+  #                                    state_pops = copy( us_states.pop.dt))
+  # write.csv( file = paste0( saveloc.hyads, '_annual2011.csv'), hyads_11a)
+  # 
+  # idwe_06a <- state_exposurer.year( fname = fname2011.idwe,
+  #                                   year.m = 2006,
+  #                                   model.use = preds.ann.idwe06w05$model.cv,
+  #                                   name.x = 'idwe',
+  #                                   mask.use = mask.usa,
+  #                                   dat.a = dats2006.a,
+  #                                   grid_pop.r = grid_popwgt.r,
+  #                                   state_pops = copy( us_states.pop.dt))
+  # write.csv( file = paste0( saveloc.idwe, '_annual2006.csv'), idwe_06a)
+  # 
+  # idwe_11a <- state_exposurer.year( fname = fname2011.idwe,
+  #                                   year.m = 2011,
+  #                                   model.use = preds.ann.idwe06w05$model.cv,
+  #                                   name.x = 'idwe',
+  #                                   mask.use = mask.usa,
+  #                                   dat.a = dats2011.a,
+  #                                   grid_pop.r = grid_popwgt.r,
+  #                                   state_pops = copy( us_states.pop.dt))
+  # write.csv( file = paste0( saveloc.idwe, '_annual2011.csv'), idwe_11a)
   
   #======================================================================#
   ## Do the annual conversions - with differencing
@@ -122,7 +122,7 @@ if( do.annual){
                                        grid_pop.r = grid_popwgt.r,
                                        state_pops = copy( us_states.pop.dt),
                                        take.diff = T)
-  write.csv( file = paste0( saveloc.hyads, '_annual_diff2006.csv'), hyads_06a.d)
+  write.csv( file = paste0( saveloc.hyads, '_annual_diff2006_2.csv'), hyads_06a.d$popwgt_states)
   
   hyads_11a.d <- state_exposurer.year( fname = fname2011.hyads,
                                        year.m = 2011,
@@ -133,29 +133,7 @@ if( do.annual){
                                        grid_pop.r = grid_popwgt.r,
                                        state_pops = copy( us_states.pop.dt),
                                        take.diff = T)
-  write.csv( file = paste0( saveloc.hyads, '_annual_diff2011.csv'), hyads_11a.d)
-  
-  idwe_06a.d <- state_exposurer.year( fname = fname2006.idwe,
-                                      year.m = 2006,
-                                      model.use = preds.ann.idwe06w05$model.cv,
-                                      name.x = 'idwe',
-                                      mask.use = mask.usa,
-                                      dat.a = dats2006.a,
-                                      grid_pop.r = grid_popwgt.r,
-                                      state_pops = copy( us_states.pop.dt),
-                                      take.diff = T)
-  write.csv( file = paste0( saveloc.idwe, '_annual_diff2006.csv'), idwe_06a.d)
-  
-  idwe_11a.d <- state_exposurer.year( fname = fname2011.idwe,
-                                      year.m = 2011,
-                                      model.use = preds.ann.idwe06w05$model.cv,
-                                      name.x = 'idwe',
-                                      mask.use = mask.usa,
-                                      dat.a = dats2011.a,
-                                      grid_pop.r = grid_popwgt.r,
-                                      state_pops = copy( us_states.pop.dt),
-                                      take.diff = T)
-  write.csv( file = paste0( saveloc.idwe, '_annual_diff2011.csv'), idwe_11a.d)
+  write.csv( file = paste0( saveloc.hyads, '_annual_diff2011_2.csv'), hyads_11a.d$popwgt_states)
   
   ## now idwe with gam!
   idwe_06a.dgam <- state_exposurer.year( fname = fname2006.idwe,
@@ -167,8 +145,8 @@ if( do.annual){
                                          grid_pop.r = grid_popwgt.r,
                                          state_pops = copy( us_states.pop.dt),
                                          take.diff = T)
-  write.csv( file = paste0( saveloc.idwe, '_annual_diffgam2006.csv'), idwe_06a.dgam)
-  
+  write.csv( file = paste0( saveloc.idwe, '_annual_diff2006_2.csv'), idwe_06a.dgam$popwgt_states)
+  # 
   idwe_11a.dgam <- state_exposurer.year( fname = fname2011.idwe,
                                          year.m = 2011,
                                          model.use = preds.ann.idwe06w05$model.gam,
@@ -178,7 +156,40 @@ if( do.annual){
                                          grid_pop.r = grid_popwgt.r,
                                          state_pops = copy( us_states.pop.dt),
                                          take.diff = T)
-  write.csv( file = paste0( saveloc.idwe, '_annual_diffgam2011.csv'), idwe_11a.dgam)
+  write.csv( file = paste0( saveloc.idwe, '_annual_diff2011_2.csv'), idwe_11a.dgam$popwgt_states)
+  
+  # gather the sums of all units
+  hyads_06allu.r <- sum( hyads_06a.d$pred_pm.r[[1:( dim( hyads_06a.d$pred_pm.r)[3] - 1)]])
+  hyads_11allu.r <- sum( hyads_11a.d$pred_pm.r[[1:( dim( hyads_11a.d$pred_pm.r)[3] - 1)]])
+  idwe_06allu.r <- sum( idwe_06a.dgam$pred_pm.r[[1:( dim( idwe_06a.dgam$pred_pm.r)[3] - 1)]])
+  idwe_11allu.r <- sum( idwe_11a.dgam$pred_pm.r[[1:( dim( idwe_11a.dgam$pred_pm.r)[3] - 1)]])
+  
+  # gather the total impacts
+  hyads_06tot.r <- hyads_06a.d$zero_out.r + hyads_06allu.r
+  hyads_11tot.r <- hyads_11a.d$zero_out.r + hyads_11allu.r
+  idwe_06tot.r <- idwe_06a.dgam$zero_out.r + idwe_06allu.r
+  idwe_11tot.r <- idwe_11a.dgam$zero_out.r + idwe_11allu.r
+  
+  # save the output
+  hyads_06zero.dt <- data.table( rasterToPoints( hyads_06a.d$zero_out.r))[, `:=`( year = 2006, field = 'zero', model = 'hyads')]
+  hyads_11zero.dt <- data.table( rasterToPoints( hyads_11a.d$zero_out.r))[, `:=`( year = 2011, field = 'zero', model = 'hyads')]
+  idwe_06zero.dt  <- data.table( rasterToPoints( idwe_06a.dgam$zero_out.r))[,  `:=`( year = 2006, field = 'zero', model = 'idwe')]
+  idwe_11zero.dt  <- data.table( rasterToPoints( idwe_11a.dgam$zero_out.r))[,  `:=`( year = 2011, field = 'zero', model = 'idwe')]
+  
+  hyads_06allu.dt <- data.table( rasterToPoints( hyads_06allu.r))[, `:=`( year = 2006, field = 'allunits', model = 'hyads')]
+  hyads_11allu.dt <- data.table( rasterToPoints( hyads_11allu.r))[, `:=`( year = 2011, field = 'allunits', model = 'hyads')]
+  idwe_06allu.dt  <- data.table( rasterToPoints( idwe_06allu.r))[,  `:=`( year = 2006, field = 'allunits', model = 'idwe')]
+  idwe_11allu.dt  <- data.table( rasterToPoints( idwe_11allu.r))[,  `:=`( year = 2011, field = 'allunits', model = 'idwe')]
+  
+  hyads_06tot.dt <- data.table( rasterToPoints( hyads_06tot.r))[, `:=`( year = 2006, field = 'total', model = 'hyads')]
+  hyads_11tot.dt <- data.table( rasterToPoints( hyads_11tot.r))[, `:=`( year = 2011, field = 'total', model = 'hyads')]
+  idwe_06tot.dt  <- data.table( rasterToPoints( idwe_06tot.r))[,  `:=`( year = 2006, field = 'total', model = 'idwe')]
+  idwe_11tot.dt  <- data.table( rasterToPoints( idwe_11tot.r))[,  `:=`( year = 2011, field = 'total', model = 'idwe')]
+  
+  annual_output <- rbind( hyads_06zero.dt, hyads_11zero.dt, idwe_06zero.dt, idwe_11zero.dt,
+                          hyads_06allu.dt, hyads_11allu.dt, idwe_06allu.dt, idwe_11allu.dt,
+                          hyads_06tot.dt, hyads_11tot.dt, idwe_06tot.dt, idwe_11tot.dt)
+  write.csv( file = "~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/annual_fields_hyads_idwe.csv", annual_output)
   
 }
 
