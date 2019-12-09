@@ -468,22 +468,18 @@ load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models2
 
 # grid-weighted population as raster
 ddm2006.sf <- st_as_sf( rasterToPolygons( dats2006.a$cmaq.ddm))
-ddm2011.sf <- st_as_sf( rasterToPolygons( dats2011.a$cmaq.ddm))
 
 # get total state populations
 us_states <- st_transform( USAboundaries::us_states(), p4s)
 ddm2006.states <- data.table( st_interpolate_aw( ddm2006.sf, us_states, extensive = F))
-ddm2011.states <- data.table( st_interpolate_aw( ddm2011.sf, us_states, extensive = F))
 
 # merge together
 ddm2006.states[, `:=` ( year = 2006, state = us_states$state_abbr[Group.1], Group.1 = NULL, geometry = NULL)]
-ddm2011.states[, `:=` ( year = 2011, state = us_states$state_abbr[Group.1], Group.1 = NULL, geometry = NULL)]
-ddm.states <- rbind( ddm2006.states, ddm2011.states)
-rcm_statesums <- merge( rcm_statesums, ddm.states, by = c( 'state', 'year'))
+rcm_statesums <- merge( rcm_statesums, ddm2006.states, by = c( 'state', 'year'))
 
 # load in model fits
 modfits.annual <- fread( "~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/annual_fields_hyads_idwe.csv", drop = 'V1')
-modfits.annual.c <- dcast( modfits.annual, x + y + year ~ field, value.var = 'layer')
+modfits.annual.c <- dcast( modfits.annual, x + y + year + model ~ field, value.var = 'layer')
 
 
 ## =========================================================== ##

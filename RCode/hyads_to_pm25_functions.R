@@ -709,8 +709,9 @@ project_and_stack <- function( ..., mask.use = NULL){
     mask_crop[!is.na( mask_crop)] <- 1
     
     list.out <- lapply( list.r, function( x){
-      x[is.na(x)] <- 0
-      trim( mask(x, mask_crop, maskvalue = NA),
+      x1 <- reclassify( x, c( NA, NA, 0))
+      # x[is.na(x)] <- 0
+      trim( mask(x1, mask_crop, maskvalue = NA),
             padding = 1)
     })
     
@@ -744,7 +745,8 @@ state_exposurer <- function(
   hyads.m = hyads.m.all,
   grid_pop.r = grid_popwgt.r,
   state_pops = copy( us_states.pop.dt),
-  take.diff = F
+  take.diff = F,
+  xboost = F
 ){
   message( paste( 'Converting', month.name[month.n]))
   
@@ -800,6 +802,7 @@ state_exposurer <- function(
   x.n <- gsub( '^XX', 'X', x.n)
   names( x.r) <- x.n
   x.proj <-  project_and_stack( dat.s[[1]], x.r, mask.use = mask.use)
+  names( x.proj)[2:dim( x.proj)[3]] <- x.n
   
   # pick out the appropriate model
   model.use <- model.dataset[ model.name, model.m][[1]]
@@ -809,26 +812,38 @@ state_exposurer <- function(
   dat.use0[[name.dat]] <- 0
   dat.coords <- coordinates( dat.s)
   dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
-  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
-  # dat.pred0c <-  predict( model.use, newdata = dat_raw0.dt, type = 'terms')
+  
+  # xboost requires special treatment
+  if( xboost){
+    dat_raw0.dt.trim <- dat_raw0.dt[, model.use$feature_names, with = F]
+    xhold1c <- xgb.DMatrix( as.matrix( dat_raw0.dt.trim))
+    dat.pred0 <- predict( model.use, newdata = xhold1c)
+  } else
+    dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
-  # dats0.rc <- rasterFromXYZ( data.table( dat.coords, dat.pred0c), crs = p4s)
   
   # do the predictions
-  pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
-  pred_popwgt.r <- brick( lapply( x.n, function( n){
+  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n[1:10], function( n){ 
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
-    # print(n)
-    # print(dat.use[[name.dat]])
     dat.use[[name.dat]] <- x.proj[[n]]
+    
+    # if zero impacts, return raster with only zeros
+    if( sum( values(x.proj[[n]]), na.rm = T) == 0)
+      return( x.proj[[n]])
     
     # set up the dataset
     dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
     
     # do the predictions
-    dat.pred <- predict( model.use, newdata = dat_raw.dt)
+    if( xboost){
+      dat_raw.dt.trim <- dat_raw.dt[, model.use$feature_names, with = F]
+      xhold.pred <- xgb.DMatrix( as.matrix( dat_raw.dt.trim))
+      dat.pred <- predict( model.use, newdata = xhold.pred)
+    } else
+      dat.pred <- predict( model.use, newdata = dat_raw.dt)
     
     # rasterize
     dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
@@ -839,42 +854,62 @@ state_exposurer <- function(
     } else 
       dats.r2 <- dats.r
     
-    # multiply by population
-    dats.r3 <- dats.r2 * dat.use[['pop']]
-    
-    names( dats.r3) <- n
-    setTxtProgressBar(pb, which( x.n == n))
-    return( dats.r3)
+    names( dats.r2) <- n
+    return( dats.r2)
   }))
-  close( pb)
+  
+  # multiply by population
+  pred_popwgt.r <- pred_pm.r * dat.s[['pop']]
+  names( pred_popwgt.r) <- names( pred_pm.r)
+  
+  #calculate raw average for the entire domain
+  pred_pm.us <- colMeans( data.table( values( pred_pm.r)), na.rm = T)
+  pred_pm.us.dt <- data.table( uID = names( pred_pm.us),
+                               mean_pm = pred_pm.us,
+                               state_abbr = 'US',
+                               ID = 100)
+  
+  #calculate pop-weightedverage for the entire domain
+  pred_pm.pw.us <- colSums( na.omit( data.table( values( pred_popwgt.r)), na.rm = T))
+  pred_pm.pw.us.dt <- data.table( uID = names( pred_pm.pw.us),
+                                  mean_popwgt = pred_pm.pw.us,
+                                  state_abbr = 'US',
+                                  ID = 100)
+  
+  # calculate raw average by state
+  pred_pm.r$ID <- mask.r
+  pred_pm.dt <- data.table( values( pred_pm.r))
+  pred_pm.dt.m <- na.omit( melt( pred_pm.dt, id.vars = 'ID', variable.name = 'uID'))
+  pred_pm.dt.s <- pred_pm.dt.m[, .( mean_pm = mean( value)), by = .( ID, uID)]
+  pred_pm.dt.s <- merge( pred_pm.dt.s, mask.a, by = 'ID')
   
   # calculate population-weighted by state
   pred_popwgt.r$ID <- mask.r
   pred_popwgt.dt <- data.table( values( pred_popwgt.r))
   pred_popwgt.dt.m <- na.omit( melt( pred_popwgt.dt, id.vars = 'ID', variable.name = 'uID'))
-  pred_popwgt.dt.s <- pred_popwgt.dt.m[, .( mean_popwgt = mean( value)), by = .( ID, uID)]
+  pred_popwgt.dt.s <- pred_popwgt.dt.m[, .( mean_popwgt = sum( value)), by = .( ID, uID)]
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
+  
+  # bind with united states pops
+  pred_pm <- rbind( pred_pm.dt.s, pred_pm.us.dt)
+  pred_pm.pw <- rbind( pred_popwgt.dt.s, pred_pm.pw.us.dt)
   
   # now just divide by each state's total population
   setnames( state_pops, popyr.name, 'pop_amnt')
+  state_pops_lite <- state_pops[, .( state_abbr, pop_amnt)]
+  pop.tot <- data.table( state_abbr = 'US', pop_amnt = sum( state_pops$pop_amnt))
+  state_pops_lite <- rbind( state_pops_lite, pop.tot)
+  pred_popwgt.out <- merge( pred_pm.pw, state_pops_lite, by = 'state_abbr')
   
-  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
-  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, state_pops[, .( state_abbr, pop_amnt)],
-                             by = 'state_abbr')
-  
-  #calculate pop-weighted for the entire domain
-  pred_popwgt.dt.all <- pred_popwgt.dt.m[, .( mean_popwgt = mean( value)), by = .( uID)]
-  pop.tot <- sum( state_pops$pop_amnt)
-  pred_popwgt.dt.all[, `:=` (pop_amnt = pop.tot,
-                             ID = 100,
-                             state_abbr = 'US')]
-  
-  #merge state and total datasets
-  pred_popwgt.out <- rbind( pred_popwgt.dt.s, pred_popwgt.dt.all)
-  
-  pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
+  # divide by total population
+  pred_popwgt.out[, `:=` ( popwgt = mean_popwgt / pop_amnt,
                           month = name.Date)]
   
-  return( pred_popwgt.out[, .( state_abbr, uID, month, mean_popwgt, pop_amnt, popwgt)])
+  # merge pop-weighted and raw dataset
+  out <- merge( pred_popwgt.out, pred_pm, by = c( 'state_abbr', 'ID', 'uID'))
+  
+  return( list( popwgt_states = out, pred_pm.r = pred_pm.r, zero_out.r = dats0.r))
+  
 }
 
 #======================================================================#
@@ -940,8 +975,7 @@ state_exposurer.year <- function(
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
   
   # do the predictions
-  # pb <- txtProgressBar(min = 0, max = length( x.n), style = 3)
-  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n, function( n){ #pbmcapply::pbmc
+  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n, function( n){ 
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.a)
@@ -974,7 +1008,24 @@ state_exposurer.year <- function(
     names( dats.r2) <- n
     return( dats.r2)
   }))
-  # close( pb)
+  
+  # multiply by population
+  pred_popwgt.r <- pred_pm.r * dat.a[['pop']]
+  names( pred_popwgt.r) <- names( pred_pm.r)
+  
+  #calculate raw average for the entire domain
+  pred_pm.us <- colMeans( data.table( values( pred_pm.r)), na.rm = T)
+  pred_pm.us.dt <- data.table( uID = names( pred_pm.us),
+                               mean_pm = pred_pm.us,
+                               state_abbr = 'US',
+                               ID = 100)
+  
+  #calculate pop-weightedverage for the entire domain
+  pred_pm.pw.us <- colSums( na.omit( data.table( values( pred_popwgt.r)), na.rm = T))
+  pred_pm.pw.us.dt <- data.table( uID = names( pred_pm.pw.us),
+                                  mean_popwgt = pred_pm.pw.us,
+                                  state_abbr = 'US',
+                                  ID = 100)
   
   # calculate raw average by state
   pred_pm.r$ID <- mask.r
@@ -983,37 +1034,24 @@ state_exposurer.year <- function(
   pred_pm.dt.s <- pred_pm.dt.m[, .( mean_pm = mean( value)), by = .( ID, uID)]
   pred_pm.dt.s <- merge( pred_pm.dt.s, mask.a, by = 'ID')
   
-  #calculate raw average for the entire domain
-  pred_pm.dt.all <- pred_pm.dt.m[, .( mean_pm = mean( value)), by = .( uID)]
-  pred_pm.dt.all[, `:=` (ID = 100, state_abbr = 'US')]
-  pred_pm <- rbind( pred_pm.dt.s, pred_pm.dt.all)
-  
-  # multiply by population
-  pred_popwgt.r <- pred_pm.r * dat.a[['pop']]
-  names( pred_popwgt.r) <- names( pred_pm.r)
-  
   # calculate population-weighted by state
   pred_popwgt.r$ID <- mask.r
   pred_popwgt.dt <- data.table( values( pred_popwgt.r))
   pred_popwgt.dt.m <- na.omit( melt( pred_popwgt.dt, id.vars = 'ID', variable.name = 'uID'))
   pred_popwgt.dt.s <- pred_popwgt.dt.m[, .( mean_popwgt = sum( value)), by = .( ID, uID)]
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
+  
+  # bind with united states pops
+  pred_pm <- rbind( pred_pm.dt.s, pred_pm.us.dt)
+  pred_pm.pw <- rbind( pred_popwgt.dt.s, pred_pm.pw.us.dt)
   
   # now just divide by each state's total population
   setnames( state_pops, popyr.name, 'pop_amnt')
-  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
-  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, state_pops[, .( state_abbr, pop_amnt)],
-                             by = 'state_abbr')
-  
-  #calculate pop-weighted for the entire domain
-  pred_popwgt.dt.all <- pred_popwgt.dt.m[, .( mean_popwgt = mean( value)), by = .( uID)]
-  pop.tot <- sum( state_pops$pop_amnt)
-  pred_popwgt.dt.all[, `:=` (pop_amnt = pop.tot,
-                             ID = 100,
-                             state_abbr = 'US')]
-  
-  #merge state and total datasets
-  pred_popwgt.out <- rbind( pred_popwgt.dt.s, pred_popwgt.dt.all)
-  
+  state_pops_lite <- state_pops[, .( state_abbr, pop_amnt)]
+  pop.tot <- data.table( state_abbr = 'US', pop_amnt = sum( state_pops$pop_amnt))
+  state_pops_lite <- rbind( state_pops_lite, pop.tot)
+  pred_popwgt.out <- merge( pred_pm.pw, state_pops_lite, by = 'state_abbr')
+
   # divide by total population
   pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
                           year = year.m)]

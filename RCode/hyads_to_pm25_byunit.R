@@ -2,7 +2,7 @@
 rm( list = ls())
 
 platform <- c( 'mac', 'cannon')[1]
-do.annual <- TRUE
+do.annual <- FALSE
 do.xb <- FALSE
 
 #coordinate reference system projection string for spatial data
@@ -27,15 +27,15 @@ if( platform == 'mac'){
   saveloc.hyads <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/popwgt_hyads'
 } else{
   source( '~/repos/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
-  load( '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/hyads_to_cmaq_models.RData')
+  load( '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/hyads_to_cmaq_models2.RData')
   grid_popwgt.xyz <- fread( '/n/home03/lhenneman/inputdata/census_population/hyads_grid_population.csv',
                             drop = 'V1')
   fstart.idwe <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/ampd_dists_sox_weighted'
   fstart.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/GRIDexposures_byunit_'
   
-  fname2006.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2006grid/HyADSunit_grid_annual_nopbl_2006.csv'
-  fname2011.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2011grid/HyADSunit_grid_annual_nopbl_2011.csv'
-  fname.ann.idwe <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2006grid/ampd_dists_sox_weighted_annual_unit.csv'
+  # fname2006.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2006grid/HyADSunit_grid_annual_nopbl_2006.csv'
+  # fname2011.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2011grid/HyADSunit_grid_annual_nopbl_2011.csv'
+  # fname.ann.idwe <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2006grid/ampd_dists_sox_weighted_annual_unit.csv'
   
   saveloc.idwe  <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_popweighted/popwgt_idwe'
   saveloc.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_popweighted/popwgt_hyads'
@@ -113,6 +113,17 @@ if( do.annual){
   ## Do the annual conversions - with differencing
   #======================================================================#
   # annual
+  hyads_11a.d <- state_exposurer.year( fname = fname2011.hyads,
+                                       year.m = 2011,
+                                       model.use = preds.ann.hyads06w05$model.gam,
+                                       name.x = 'hyads',
+                                       mask.use = mask.usa,
+                                       dat.a = dats2011.a,
+                                       grid_pop.r = grid_popwgt.r,
+                                       state_pops = copy( us_states.pop.dt),
+                                       take.diff = T)
+  write.csv( file = paste0( saveloc.hyads, '_annual_diff2011_2.csv'), hyads_11a.d$popwgt_states)
+  
   hyads_06a.d <- state_exposurer.year( fname = fname2006.hyads,
                                        year.m = 2006,
                                        model.use = preds.ann.hyads06w05$model.gam,
@@ -124,16 +135,6 @@ if( do.annual){
                                        take.diff = T)
   write.csv( file = paste0( saveloc.hyads, '_annual_diff2006_2.csv'), hyads_06a.d$popwgt_states)
   
-  hyads_11a.d <- state_exposurer.year( fname = fname2011.hyads,
-                                       year.m = 2011,
-                                       model.use = preds.ann.hyads06w05$model.gam,
-                                       name.x = 'hyads',
-                                       mask.use = mask.usa,
-                                       dat.a = dats2011.a,
-                                       grid_pop.r = grid_popwgt.r,
-                                       state_pops = copy( us_states.pop.dt),
-                                       take.diff = T)
-  write.csv( file = paste0( saveloc.hyads, '_annual_diff2011_2.csv'), hyads_11a.d$popwgt_states)
   
   ## now idwe with gam!
   idwe_06a.dgam <- state_exposurer.year( fname = fname2006.idwe,
@@ -175,6 +176,10 @@ if( do.annual){
   hyads_11zero.dt <- data.table( rasterToPoints( hyads_11a.d$zero_out.r))[, `:=`( year = 2011, field = 'zero', model = 'hyads')]
   idwe_06zero.dt  <- data.table( rasterToPoints( idwe_06a.dgam$zero_out.r))[,  `:=`( year = 2006, field = 'zero', model = 'idwe')]
   idwe_11zero.dt  <- data.table( rasterToPoints( idwe_11a.dgam$zero_out.r))[,  `:=`( year = 2011, field = 'zero', model = 'idwe')]
+  setnames( hyads_06zero.dt, 'dat.pred0', 'layer')
+  setnames( hyads_11zero.dt, 'dat.pred0', 'layer')
+  setnames( idwe_06zero.dt,  'dat.pred0', 'layer')
+  setnames( idwe_11zero.dt,  'dat.pred0', 'layer')
   
   hyads_06allu.dt <- data.table( rasterToPoints( hyads_06allu.r))[, `:=`( year = 2006, field = 'allunits', model = 'hyads')]
   hyads_11allu.dt <- data.table( rasterToPoints( hyads_11allu.r))[, `:=`( year = 2011, field = 'allunits', model = 'hyads')]
@@ -257,58 +262,54 @@ mon <- ifelse( mon == 0, 12, mon)
 
 # IDWE
 if( array_num %in% 1:12){
-  idwe_exp06 <- rbindlist( lapply( mon, 
-                                   state_exposurer,
-                                   fstart = fstart.idwe,
-                                   year.m = 2006,
-                                   model.dataset = preds.mon.idwe06w05,
-                                   model.name = 'model.gam', #'model.gam'
-                                   name.x = 'idwe',
-                                   mask.use = mask.usa,
-                                   take.diff = T)) #[ mask.usa$state_abbr %in% states.use,]))
+  idwe_exp06 <- state_exposurer( month.n = mon, 
+                                 fstart = fstart.idwe,
+                                 year.m = 2006,
+                                 model.dataset = preds.mon.idwe06w05,
+                                 model.name = 'model.gam', #'model.gam'
+                                 name.x = 'idwe',
+                                 mask.use = mask.usa,
+                                 take.diff = T) #[ mask.usa$state_abbr %in% states.use,]))
   
-  write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '.csv'), idwe_exp06)
+  write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '.csv'), idwe_exp06$popwgt_states)
 }
 
 if( array_num %in% 13:24){
-  idwe_exp11 <- rbindlist( lapply( mon, 
-                                   state_exposurer,
-                                   fstart = fstart.idwe,
-                                   year.m = 2011,
-                                   model.dataset = preds.mon.idwe06w05,
-                                   model.name = 'model.gam', #'model.gam'
-                                   name.x = 'idwe',
-                                   mask.use = mask.usa,
-                                   take.diff = T))
-  write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '.csv'), idwe_exp11)
+  idwe_exp11 <- state_exposurer( month.n = mon, 
+                                 fstart = fstart.idwe,
+                                 year.m = 2011,
+                                 model.dataset = preds.mon.idwe06w05,
+                                 model.name = 'model.gam', #'model.gam'
+                                 name.x = 'idwe',
+                                 mask.use = mask.usa,
+                                 take.diff = T)
+  write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '.csv'), idwe_exp11$popwgt_states)
 }
 
 if( array_num %in% 25:36){
   # HyADS
-  hyads_exp06 <- rbindlist( lapply( mon, 
-                                    state_exposurer,
-                                    fstart = fstart.hyads,
-                                    year.m = 2006,
-                                    model.dataset = preds.mon.hyads06w05,
-                                    model.name = 'model.gam',
-                                    name.x = 'hyads',
-                                    mask.use = mask.usa,
-                                    take.diff = T))
-  write.csv( file = paste0( saveloc.hyads, 2006, '_', mon, '.csv'), hyads_exp06)
+  hyads_exp06 <- state_exposurer( month.n = mon, 
+                                  fstart = fstart.hyads,
+                                  year.m = 2006,
+                                  model.dataset = preds.mon.hyads06w05,
+                                  model.name = 'model.gam',
+                                  name.x = 'hyads',
+                                  mask.use = mask.usa,
+                                  take.diff = T)
+  write.csv( file = paste0( saveloc.hyads, 2006, '_', mon, '.csv'), hyads_exp06$popwgt_states)
 }
 
 if( array_num %in% 37:48){
-  hyads_exp11 <- rbindlist( lapply( mon, 
-                                    state_exposurer,
-                                    fstart = fstart.hyads,
-                                    year.m = 2011,
-                                    model.dataset = preds.mon.hyads06w05,
-                                    model.name = 'model.gam',
-                                    name.x = 'hyads',
-                                    mask.use = mask.usa,
-                                    take.diff = T))
+  hyads_exp11 <- state_exposurer( month.n = mon, 
+                                  fstart = fstart.hyads,
+                                  year.m = 2011,
+                                  model.dataset = preds.mon.hyads06w05,
+                                  model.name = 'model.gam',
+                                  name.x = 'hyads',
+                                  mask.use = mask.usa,
+                                  take.diff = T)
   
-  write.csv( file = paste0( saveloc.hyads, 2011, '_', mon, '.csv'), hyads_exp11)
+  write.csv( file = paste0( saveloc.hyads, 2011, '_', mon, '.csv'), hyads_exp11$popwgt_states)
 }
 
 
