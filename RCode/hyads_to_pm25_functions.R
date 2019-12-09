@@ -824,7 +824,7 @@ state_exposurer <- function(
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
   
   # do the predictions
-  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n[1:10], function( n){ 
+  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n, function( n){ 
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
