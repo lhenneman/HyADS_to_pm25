@@ -27,7 +27,7 @@ if( platform == 'mac'){
   saveloc.hyads <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/popwgt_hyads'
 } else{
   source( '~/repos/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
-  load( '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/hyads_to_cmaq_models2.RData')
+  load( '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/hyads_to_cmaq_models3.RData')
   grid_popwgt.xyz <- fread( '/n/home03/lhenneman/inputdata/census_population/hyads_grid_population.csv',
                             drop = 'V1')
   fstart.idwe <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/ampd_dists_sox_weighted'
@@ -272,8 +272,17 @@ if( array_num %in% 1:12){
                                  name.x = 'idwe',
                                  mask.use = mask.usa,
                                  take.diff = T) #[ mask.usa$state_abbr %in% states.use,]))
+  idwe_exp06g <- state_exposurer( month.n = mon, 
+                                 fstart = fstart.idwe,
+                                 year.m = 2006,
+                                 model.dataset = preds.mon.idwe06w05,
+                                 model.name = 'model.gam',
+                                 name.x = 'idwe',
+                                 mask.use = mask.usa,
+                                 take.diff = T) #[ mask.usa$state_abbr %in% states.use,]))
   
   write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '_3.csv'), idwe_exp06$popwgt_states)
+  write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '_3g.csv'), idwe_exp06g$popwgt_states)
 }
 
 if( array_num %in% 13:24){
@@ -285,7 +294,16 @@ if( array_num %in% 13:24){
                                  name.x = 'idwe',
                                  mask.use = mask.usa,
                                  take.diff = T)
+  idwe_exp11g <- state_exposurer( month.n = mon, 
+                                 fstart = fstart.idwe,
+                                 year.m = 2011,
+                                 model.dataset = preds.mon.idwe06w05,
+                                 model.name = 'model.gam',
+                                 name.x = 'idwe',
+                                 mask.use = mask.usa,
+                                 take.diff = T)
   write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '_3.csv'), idwe_exp11$popwgt_states)
+  write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '_3g.csv'), idwe_exp11g$popwgt_states)
 }
 
 if( array_num %in% 25:36){
@@ -298,7 +316,16 @@ if( array_num %in% 25:36){
                                   name.x = 'hyads',
                                   mask.use = mask.usa,
                                   take.diff = T)
+  hyads_exp06g <- state_exposurer( month.n = mon, 
+                                  fstart = fstart.hyads,
+                                  year.m = 2006,
+                                  model.dataset = preds.mon.hyads06w05,
+                                  model.name = 'model.gam',
+                                  name.x = 'hyads',
+                                  mask.use = mask.usa,
+                                  take.diff = T)
   write.csv( file = paste0( saveloc.hyads, 2006, '_', mon, '_3.csv'), hyads_exp06$popwgt_states)
+  write.csv( file = paste0( saveloc.hyads, 2006, '_', mon, '_3g.csv'), hyads_exp06g$popwgt_states)
 }
 
 if( array_num %in% 37:48){
@@ -310,8 +337,17 @@ if( array_num %in% 37:48){
                                   name.x = 'hyads',
                                   mask.use = mask.usa,
                                   take.diff = T)
+  hyads_exp11g <- state_exposurer( month.n = mon, 
+                                  fstart = fstart.hyads,
+                                  year.m = 2011,
+                                  model.dataset = preds.mon.hyads06w05,
+                                  model.name = 'model.gam',
+                                  name.x = 'hyads',
+                                  mask.use = mask.usa,
+                                  take.diff = T)
   
   write.csv( file = paste0( saveloc.hyads, 2011, '_', mon, '_3.csv'), hyads_exp11$popwgt_states)
+  write.csv( file = paste0( saveloc.hyads, 2011, '_', mon, '_3g.csv'), hyads_exp11g$popwgt_states)
 }
 
 

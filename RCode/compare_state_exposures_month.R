@@ -4,8 +4,8 @@ source( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RCode/hyads_to_pm25_funct
 #   Read in monthly unit links
 ## =================================================== ##
 loc <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/units_monthly/'
-files.idwe  <- paste0( loc, 'popwgt_idwe', rep( c( 2006, 2011), each = 12), '_', 1:12, '.csv')
-files.hyads <- paste0( loc, 'popwgt_hyads', rep( c( 2006, 2011), each = 12), '_', 1:12, '.csv')
+files.idwe  <- paste0( loc, 'popwgt_idwe', rep( c( 2006, 2011), each = 12), '_', 1:12, '_3.csv')
+files.hyads <- paste0( loc, 'popwgt_hyads', rep( c( 2006, 2011), each = 12), '_', 1:12, '_3.csv')
 
 idwe_month.dt <-  rbindlist( lapply( files.idwe,  fread, drop = c( 'V1', 'ID')))
 hyads_month.dt <- rbindlist( lapply( files.hyads, fread, drop = c( 'V1', 'ID')))

@@ -368,6 +368,9 @@ adjoint_all <- rbind( adj.other_states,
                       adj.stack_height_plus1,
                       adj.stack_height_plus2)
 
+# convert from ton/yr to kg / hr
+adjoint_all[, sox_exp.adj := `SOx exposure` * 907.185 / 8760]
+
 #======================================================================#
 ## area weight over states
 #======================================================================#
@@ -375,7 +378,7 @@ adjoint_all <- rbind( adj.other_states,
 adjoint_all_pop <- merge( us_states.pop.dt.m, adjoint_all, 
                           by.x = c( 'state_abbr', 'year'), by.y = c( 'state', 'year'))
 setnames( adjoint_all_pop, 'state_abbr', 'state')
-adjoint_all_pop[, adj_popwgt := `SOx exposure` / pop] 
+adjoint_all_pop[, adj_popwgt := sox_exp.adj / pop] 
 
 ## =========================================================== ##
 ## adjoint variability between plume assumptions
@@ -398,14 +401,14 @@ exp_home_annual <- '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData'
 dropcols <- c( 'V1', 'mean_popwgt', 'pop_amnt')
 
 # IDWE
-idwe_2006 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diff2006_2.csv'), drop = dropcols)
-idwe_2011 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diff2011_2.csv'), drop = dropcols)
+idwe_2006 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diff2006_3.csv'), drop = dropcols)
+idwe_2011 <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_diff2011_3.csv'), drop = dropcols)
 idwe_all <- rbind( idwe_2006, idwe_2011)[uID != 'Xtot.sum']
 setnames( idwe_all, c( 'popwgt', 'mean_pm'), c( 'idwe.pw', 'idwe.mean'))
 
 # HyADS
-hyads_2006 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2006_2.csv'), drop = dropcols)
-hyads_2011 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2011_2.csv'), drop = dropcols)
+hyads_2006 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2006_3.csv'), drop = dropcols)
+hyads_2011 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2011_3.csv'), drop = dropcols)
 hyads_all <- rbind( hyads_2006, hyads_2011)
 setnames( hyads_all, c( 'popwgt', 'mean_pm'), c( 'hyads.pw', 'hyads.mean'))
 
@@ -430,7 +433,7 @@ setnames( rcm_exp, 'state_abbr', 'state')
 
 
 ggplot( data = rcm_exp[ state %in% states.use]) +
-  geom_point( aes( x = hyads, y = idwe, color = year)) + 
+  geom_point( aes( x = hyads.pw, y = idwe.pw, color = year)) + 
   # scale_y_continuous( limits = c( 0,1)) + 
   facet_wrap( . ~ state)
 ## =========================================================== ##
@@ -488,7 +491,7 @@ modfits.annual.c <- dcast( modfits.annual, x + y + year + model ~ field, value.v
 
 gghyads.lin <- ggplot( data = ranks_adj_all[adj.name == 'initial' & year %in% c( 2006, 2012)],
                        aes( x = adj_popwgt,
-                            y = hyads)) +
+                            y = hyads.pw)) +
   geom_point() +
   geom_smooth( method = 'lm') +
   facet_grid( rows = vars( state.factor),
@@ -541,8 +544,8 @@ ggIDWE.rank <- ggplot( data = ranks_adj_all[adj.name == 'initial' & year %in% c(
 ## =========================================================== ##
 ## Plot fraction of emissions vs. exposure fraction
 ## =========================================================== ##
-eval.hyads <- ranks_adj_all[, eval.fn( hyads, adj_popwgt, 'HyADS'), by = .( state, year, adj.name)]
-eval.idwe  <- ranks_adj_all[, eval.fn( idwe, adj_popwgt, 'IDWE'), by = .( state, year, adj.name)]
+eval.hyads <- ranks_adj_all[, eval.fn( hyads.pw, adj_popwgt, 'HyADS'), by = .( state, year, adj.name)]
+eval.idwe  <- ranks_adj_all[, eval.fn( idwe.pw, adj_popwgt, 'IDWE'), by = .( state, year, adj.name)]
 eval.all <- rbind( eval.hyads, eval.idwe)
 
 # melt
