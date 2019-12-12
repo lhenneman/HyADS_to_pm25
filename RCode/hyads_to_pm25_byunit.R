@@ -1,8 +1,8 @@
 #srun -p test --mem 100g -t 0-06:00 -c 1 -N 1 --pty /bin/bash
 rm( list = ls())
 
-platform <- c( 'mac', 'cannon')[1]
-do.annual <- TRUE
+platform <- c( 'mac', 'cannon')[2]
+do.annual <- FALSE
 do.xb <- FALSE
 
 #coordinate reference system projection string for spatial data
@@ -273,7 +273,7 @@ if( array_num %in% 1:12){
                                  mask.use = mask.usa,
                                  take.diff = T) #[ mask.usa$state_abbr %in% states.use,]))
   
-  write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '3.csv'), idwe_exp06$popwgt_states)
+  write.csv( file = paste0( saveloc.idwe, 2006, '_', mon, '_3.csv'), idwe_exp06$popwgt_states)
 }
 
 if( array_num %in% 13:24){
@@ -285,7 +285,7 @@ if( array_num %in% 13:24){
                                  name.x = 'idwe',
                                  mask.use = mask.usa,
                                  take.diff = T)
-  write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '3.csv'), idwe_exp11$popwgt_states)
+  write.csv( file = paste0( saveloc.idwe, 2011, '_', mon, '_3.csv'), idwe_exp11$popwgt_states)
 }
 
 if( array_num %in% 25:36){
@@ -298,7 +298,7 @@ if( array_num %in% 25:36){
                                   name.x = 'hyads',
                                   mask.use = mask.usa,
                                   take.diff = T)
-  write.csv( file = paste0( saveloc.hyads, 2006, '_', mon, '3.csv'), hyads_exp06$popwgt_states)
+  write.csv( file = paste0( saveloc.hyads, 2006, '_', mon, '_3.csv'), hyads_exp06$popwgt_states)
 }
 
 if( array_num %in% 37:48){
@@ -311,7 +311,7 @@ if( array_num %in% 37:48){
                                   mask.use = mask.usa,
                                   take.diff = T)
   
-  write.csv( file = paste0( saveloc.hyads, 2011, '_', mon, '3.csv'), hyads_exp11$popwgt_states)
+  write.csv( file = paste0( saveloc.hyads, 2011, '_', mon, '_3.csv'), hyads_exp11$popwgt_states)
 }
 
 
