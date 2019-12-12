@@ -481,6 +481,15 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   Y.ho.terms.dt <- data.table( dat.coords.ho, Y.ho.terms$fit)
   Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit)
   
+  # CHANGE
+  # Y.tr.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.tr, se.fit = T, type = 'terms')
+  # Y.tr.terms.gam.cv.dt <- data.table( dat.coords.tr, Y.tr.terms.gam.cv$fit)
+  # Y.tr.terms.gam.raster <- projectRaster( rasterFromXYZ( Y.tr.terms.gam.cv.dt, crs = crs.in), dat.stack)
+  # summary( values( Y.tr.terms.gam.raster - Y.ho.terms.gam.raster))
+  # summary( dat.stack.tr$cmaq.ddm - dat.stack.ho$cmaq.ddm)
+  # summary( dat.stack.tr$hyads - dat.stack.ho$hyads)
+  # summary( dat.stack.tr$idwe - dat.stack.ho$idwe)
+  
   # set up evaluation data.table
   Y.ho.hat <- data.table( dat.coords.ho, y.ho, y.hat.lm.cv = y.hat.lm.cv$fit, y.hat.gam.cv = y.hat.gam.cv$fit, 
                           y.hat.lm.ncv = y.hat.lm.ncv$fit, y.hat.mean, y.hat.Z)
@@ -587,8 +596,8 @@ mean.lol <- function( lol, layer1, layer2, plot.out = TRUE){
 #======================================================================#
 # ggplot a raster
 #======================================================================#
-ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL, 
-                             mask.raster = NULL, nrow. = NULL, ncol. = NULL){
+ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL, mask.raster = NULL, 
+                             nrow. = NULL, ncol. = NULL, legend.name = NULL, theme.obj = theme()){
   
   in.x <- list( ...)
   
@@ -626,7 +635,7 @@ ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL,
   
   ggplot( dat.dt) +
     geom_tile( aes( x = x, y = y, fill = z)) + 
-    scale_fill_viridis( name = NULL, limits = bounds, oob = scales::squish) + 
+    scale_fill_viridis( name = legend.name, limits = bounds, oob = scales::squish) + 
     facet_wrap( . ~ name.in, nrow = nrow., ncol = ncol.) + 
     # expand_limits( fill = 0) +
     theme_bw() + 
@@ -636,7 +645,8 @@ ggplot.a.raster <- function( ..., bounds = NULL, facet.names = NULL,
            legend.position = 'bottom',
            legend.key.width = unit( ncol( in.x[[1]])/3000, 'npc'),
            panel.grid = element_blank(),
-           strip.background = element_blank())
+           strip.background = element_blank()) + 
+    theme.obj
 }
 
 #======================================================================#
@@ -1062,3 +1072,19 @@ state_exposurer.year <- function(
   return( list( popwgt_states = out, pred_pm.r = pred_pm.r, zero_out.r = dats0.r))
 }
 
+#======================================================================#
+## calculate evaluation metrics
+#======================================================================#
+evals.fn <- function( Yhat, Yact){
+  num.diff <- sum( Yhat - Yact)
+  abs.diff <- sum( abs( Yhat - Yact))
+  denom <- sum( Yact)
+  metrics <- data.table( NMB = num.diff / denom,
+                         NME = abs.diff / denom,
+                         MB   = num.diff / length( Yhat),
+                         ME   = abs.diff / length( Yhat),
+                         RMSE = sqrt( sum( ( Yhat - Yact) ^ 2) / length( Yhat)),
+                         R.p = cor( Yhat, Yact, method = 'pearson'),
+                         R.s = cor( Yhat, Yact, method = 'spearman'))
+  return( metrics)
+}

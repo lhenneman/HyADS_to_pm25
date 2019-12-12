@@ -63,9 +63,9 @@ names( ddm2006) <- 'cmaq.ddm'
 ## Load monthly hyads
 #======================================================================#
 # read monthly grid files
-hyads2005.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_month_nopbl2005.csv', drop = 'V1')
-hyads2006.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_month_nopbl2006.csv', drop = 'V1')
-hyads2011.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2011grid/HyADS_grid_month_2011.csv', drop = 'V1')
+hyads2005.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_month_nopbl2005.csv', drop = 'V1')
+hyads2006.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_month_nopbl2006.csv', drop = 'V1')
+hyads2011.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_month_nopbl2011.csv', drop = 'V1')
 
 # create lists from monthly grid objects
 hyads2005.m.l <- split( hyads2005.m.dt, by = 'yearmonth')
@@ -93,9 +93,9 @@ hyads.m.all <- stack( stack( hyads2005.m), stack( hyads2006.m), stack( hyads2011
 #======================================================================#
 ## Load anuual hyads
 #======================================================================#
-hyads2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2005grid/HyADS_grid_annual_nopbl_5day_2005.csv', drop = 'V1')
-hyads2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2006grid/HyADS_grid_annual_nopbl_5day_2006.csv', drop = 'V1')
-hyads2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/2011grid/HyADS_grid_2011.csv', drop = 'V1')
+hyads2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_annual_nopbl_2005.csv', drop = 'V1')
+hyads2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_annual_nopbl_2006.csv', drop = 'V1')
+hyads2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_annual_nopbl_2011.csv', drop = 'V1')
 hyads2005 <- rasterFromXYZ( hyads2005.dt[, .( x, y, hyads)], crs = p4s)
 hyads2006 <- rasterFromXYZ( hyads2006.dt[, .( x, y, hyads)], crs = p4s)
 hyads2011 <- rasterFromXYZ( hyads2011.dt[, .( x, y, hyads)], crs = p4s)
@@ -151,6 +151,10 @@ names( idwe2005) <- 'idwe'
 names( idwe2006) <- 'idwe'
 names( idwe2011) <- 'idwe'
 
+summary(( hyads2006 - hyads2005) / hyads2005)
+summary(( ddm2006 - ddm2005) / ddm2005)
+summary(( idwe2006 - idwe2005) / idwe2005)
+
 ## ========================================================= ##
 ##                Plots
 ## ========================================================= ##
@@ -159,6 +163,12 @@ names( idwe2011) <- 'idwe'
 us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
 us_states <- st_transform( USAboundaries::us_states(), p4s)
 mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
+
+plot( ( hyads2006 - hyads2005) / hyads2005)
+plot(mask.usa, add = T)
+plot( (( ddm2006 - ddm2005) / ddm2005))
+plot( (( idwe2006 - idwe2005) / idwe2005))
+
 
 plot( hyads.m.all$X2005.07.01)
 plot(mask.usa, add = T)
@@ -183,21 +193,24 @@ dats2011.a <- project_and_stack( ddm2006, hyads2011, idwe2011,
                                  mets2011, d_nonegu.r, mask.use = mask.usa)
 dats2011.a$cmaq.ddm <- NA
 
+summary( dats2006.a - dats2005.a)
+summary( dats2011.a - dats2005.a)
+
 cor( values( dats2005.a), use = 'complete.obs')
 cor( values( dats2006.a), use = 'complete.obs')
 
 dats2005.v <- data.table( values( dats2005.a))
 dats2006.v <- data.table( values( dats2006.a))
-plot( dats2005.v[, .(cmaq.ddm, hyads, tot.sum)])
-plot( dats2006.v[, .(cmaq.ddm, hyads, tot.sum)])
+plot( dats2005.v[, .(cmaq.ddm, hyads, idwe)])
+plot( dats2006.v[, .(cmaq.ddm, hyads, idwe)])
 plot( dats2005.a$cmaq.ddm < 1.2 & dats2005.a$hyads > 1.5e8)
 plot( dats2006.a$cmaq.ddm < 1.2 & dats2006.a$hyads > 1.5e8)
 d2005.red <- which( dats2005.v$cmaq.ddm < 1.2 & dats2005.v$hyads > 1.5e8)
-plot( dats2005.v[d2005.red,.(cmaq.ddm, hyads, tot.sum)], col = 'red')
+plot( dats2005.v[d2005.red,.(cmaq.ddm, hyads, idwe)], col = 'red')
 
 cor( dats2005.v[!d2005.red], use = 'complete.obs')
 
-plot( dats2005.v[!d2005.red,.(cmaq.ddm, hyads, tot.sum)])
+plot( dats2005.v[!d2005.red,.(cmaq.ddm, hyads, idwe)])
 
 #======================================================================#
 ## Combine into raster stack, train model
@@ -216,32 +229,32 @@ preds.mon.idwe06w05  <- mapply( month.trainer, names( mets2005.m), names( mets20
                                                  idwe.m = idwe.m, emiss.m = d_nonegu.r, 
                                                  .mask.use = mask.usa, cov.names = cov.names))
 # predict each month in 2006 using model trained in 2005
-preds.mon.hyads05w06 <- mapply( month.trainer, names( mets2006.m), names( mets2005.m),
-                                MoreArgs = list( name.x = 'hyads', y.m = hyads.m.all,
-                                                 ddm.m = ddm.m.all, mets.m = mets.m.all,
-                                                 idwe.m = idwe.m, emiss.m = d_nonegu.r, 
-                                                 .mask.use = mask.usa, cov.names = cov.names))
-preds.mon.idwe05w06  <- mapply( month.trainer, names( mets2006.m), names( mets2005.m),
-                                MoreArgs = list( name.x = 'idwe', y.m = idwe.m,
-                                                 ddm.m = ddm.m.all, mets.m = mets.m.all,
-                                                 idwe.m = idwe.m, emiss.m = d_nonegu.r, 
-                                                 .mask.use = mask.usa, cov.names = cov.names))
+# preds.mon.hyads05w06 <- mapply( month.trainer, names( mets2006.m), names( mets2005.m),
+#                                 MoreArgs = list( name.x = 'hyads', y.m = hyads.m.all,
+#                                                  ddm.m = ddm.m.all, mets.m = mets.m.all,
+#                                                  idwe.m = idwe.m, emiss.m = d_nonegu.r, 
+#                                                  .mask.use = mask.usa, cov.names = cov.names))
+# preds.mon.idwe05w06  <- mapply( month.trainer, names( mets2006.m), names( mets2005.m),
+#                                 MoreArgs = list( name.x = 'idwe', y.m = idwe.m,
+#                                                  ddm.m = ddm.m.all, mets.m = mets.m.all,
+#                                                  idwe.m = idwe.m, emiss.m = d_nonegu.r, 
+#                                                  .mask.use = mask.usa, cov.names = cov.names))
 
 # predict annual 2006 using model trained in 2005
-preds.ann.hyads06w05 <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, name.idwe = 'idwe',
+preds.ann.hyads06w05 <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, name.idwe = 'idwe', x.name = 'hyads',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 preds.ann.idwe06w05  <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, name.idwe = 'idwe', x.name = 'idwe',
                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 
 # predict annual 2006 using model trained in 2005
-preds.ann.hyads05w06 <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, name.idwe = 'idwe',
-                                              ho.frac = 0, covars.names = cov.names, return.mods = T)
-preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, name.idwe = 'idwe', x.name = 'idwe',
-                                              ho.frac = 0, covars.names = cov.names, return.mods = T)
+# preds.ann.hyads05w06 <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, name.idwe = 'idwe', x.name = 'hyads',
+#                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
+# preds.ann.idwe05w06  <- lm.hyads.ddm.holdout( dat.stack = dats2006.a, dat.stack.pred = dats2005.a, name.idwe = 'idwe', x.name = 'idwe',
+#                                               ho.frac = 0, covars.names = cov.names, return.mods = T)
 
 # predict annual 2006 using model trained in 2005 - include inverse distance
-preds.ann.hyads06w05.i <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, 
-                                              ho.frac = 0, covars.names = c( cov.names, 'idwe'), return.mods = T)
+# preds.ann.hyads06w05.i <- lm.hyads.ddm.holdout( dat.stack = dats2005.a, dat.stack.pred = dats2006.a, 
+#                                               ho.frac = 0, covars.names = c( cov.names, 'idwe'), return.mods = T)
 
 #======================================================================#
 ## Save data
@@ -257,7 +270,7 @@ save( dats2005.a, dats2006.a, dats2011.a,
       preds.mon.idwe06w05,  #preds.mon.idwe05w06,
       preds.ann.hyads06w05, #preds.ann.hyads05w06,
       preds.ann.idwe06w05,  #preds.ann.idwe05w06,
-      file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models2.RData')
+      file = '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models3.RData')
 
 
 # do correlation comparisons on quintiles
