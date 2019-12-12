@@ -31,7 +31,7 @@ if( platform == 'mac'){
   grid_popwgt.xyz <- fread( '/n/home03/lhenneman/inputdata/census_population/hyads_grid_population.csv',
                             drop = 'V1')
   fstart.idwe <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_ampd_dists/ampd_dists_sox_weighted'
-  fstart.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/GRIDexposures_byunit_'
+  fstart.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/gridexposures/GRIDexposures_byunit_'
   
   # fname2006.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2006grid/HyADSunit_grid_annual_nopbl_2006.csv'
   # fname2011.hyads <- '/n/scratchlfs/zigler_lab/lhenneman/run_hyspdisp/output_HyADS/2011grid/HyADSunit_grid_annual_nopbl_2011.csv'
