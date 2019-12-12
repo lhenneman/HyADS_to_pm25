@@ -268,7 +268,7 @@ if( array_num %in% 1:12){
                                  fstart = fstart.idwe,
                                  year.m = 2006,
                                  model.dataset = preds.mon.idwe06w05,
-                                 model.name = 'model.gam', #'model.gam'
+                                 model.name = 'model.cv', #'model.gam'
                                  name.x = 'idwe',
                                  mask.use = mask.usa,
                                  take.diff = T) #[ mask.usa$state_abbr %in% states.use,]))
@@ -281,7 +281,7 @@ if( array_num %in% 13:24){
                                  fstart = fstart.idwe,
                                  year.m = 2011,
                                  model.dataset = preds.mon.idwe06w05,
-                                 model.name = 'model.gam', #'model.gam'
+                                 model.name = 'model.cv', #'model.gam'
                                  name.x = 'idwe',
                                  mask.use = mask.usa,
                                  take.diff = T)
@@ -294,7 +294,7 @@ if( array_num %in% 25:36){
                                   fstart = fstart.hyads,
                                   year.m = 2006,
                                   model.dataset = preds.mon.hyads06w05,
-                                  model.name = 'model.gam',
+                                  model.name = 'model.cv',
                                   name.x = 'hyads',
                                   mask.use = mask.usa,
                                   take.diff = T)
@@ -306,7 +306,7 @@ if( array_num %in% 37:48){
                                   fstart = fstart.hyads,
                                   year.m = 2011,
                                   model.dataset = preds.mon.hyads06w05,
-                                  model.name = 'model.gam',
+                                  model.name = 'model.cv',
                                   name.x = 'hyads',
                                   mask.use = mask.usa,
                                   take.diff = T)
