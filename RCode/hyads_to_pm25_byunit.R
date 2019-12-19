@@ -1,4 +1,4 @@
-#srun -p test --mem 100g -t 0-06:00 -c 1 -N 1 --pty /bin/bash
+#srun -p test --mem 21g -t 0-06:00 -c 1 -N 1 --pty /bin/bash
 rm( list = ls())
 
 platform <- c( 'mac', 'cannon')[2]

@@ -500,8 +500,8 @@ ggplot.a.raster( preds.mon.idwe05w06['Y.ho.terms.gam.raster','X2006.07.01'][[1]]
 #======================================================================#
 ## extract evaluation statistics
 ## IDWE gets big change from bivariate spline, HyADS does not  
-preds.metrics.hyads <- preds.mon.hyads05w06[ 'metrics',]
-preds.metrics.idwe  <- preds.mon.idwe05w06[ 'metrics',]
+preds.metrics.hyads <- preds.mon.hyads06w05[ 'metrics',]
+preds.metrics.idwe  <- preds.mon.idwe06w05[ 'metrics',]
 
 metrics <- data.table( month = c( as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.hyads)))),
                                   as.Date( gsub( '\\.', '-', gsub( 'X', '', names( preds.metrics.idwe))))),

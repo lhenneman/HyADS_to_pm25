@@ -8,6 +8,10 @@ library( ggpubr)
 library( cowplot)
 library( raster)
 library( sf)
+source( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
+#coordinate reference system projection string for spatial data
+p4s <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000"
+
 
 ## =========================================================== ##
 ## Define facilities plotting data
@@ -58,6 +62,8 @@ plot_ranked_facs <- function( ranks.dt,
   
   # -- download states  -- #
   states <- data.table( map_data("state"))
+  # if( state.abbrev == 'US')
+  #   state.abbrev <- state.abb
   state <- tolower( state.name[ match( state.abbrev, state.abb)])
   state.poly <- states[region %in% state]
   
@@ -67,6 +73,10 @@ plot_ranked_facs <- function( ranks.dt,
   } else
     plot.title <- paste("Top facilities by pop-weighted exposure on", geo.name)
   
+  # -- define columns for scalebar  -- #
+  ranks.dt.units[, `:=` ( long = Longitude,
+                          lat = Latitude)]
+  
   # -- make the plot  -- #
   gg_coal <- ggplot() + 
     theme_bw() + 
@@ -75,7 +85,7 @@ plot_ranked_facs <- function( ranks.dt,
     geom_polygon(data = states, 
                  aes(x = long, y = lat, group = group),
                  fill = 'white', 
-                 color = "black",
+                 color = "grey70",
                  size = .25) + 
     geom_polygon(data = state.poly, 
                  aes(x = long, y = lat, group = group),
@@ -90,31 +100,11 @@ plot_ranked_facs <- function( ranks.dt,
     geom_point(data = ranks.dt.units, 
                aes(x = Longitude, 
                    y = Latitude, 
-                   size = size.var),
+                   color = size.var),
                stroke = 1,
-               shape = 1,
-               color = '#479ddd') +
-    scale_size_area(guide = guide_legend(title.position = "top"),
-                    name = paste( size.name, 'exposure')#,
-                    # range = c(.5,5.0)
-    ) +
-    theme(
-      plot.title = element_text(size = 16, hjust = 0.5), #element_blank(), #
-      axis.title = element_text(size = 24),
-      axis.text = element_blank(),
-      axis.title.x = element_blank(),
-      axis.title.y = element_blank(),
-      legend.title = element_text(size = 10),
-      legend.title.align = 0.5,
-      legend.position = "bottom", #c(.22, .15),
-      legend.text = element_text(size = 8, angle = 0),
-      legend.background = element_rect(fill = 'transparent'),
-      legend.key.size = unit(.05, 'npc'),
-      legend.direction = 'horizontal',
-      # rect = element_blank(), #( fill = 'transparent'),
-      strip.text = element_text( size = 14),
-      strip.background = element_rect( fill = 'white')
-    )  + 
+               size = 3,
+               shape = 21) +#,
+    #      color = '#479ddd') + 
     geom_rect( data = latlonrange,
                aes(xmin = xlim[1] - 5, 
                    xmax = xlim[1] + (xlim[2] - xlim[1]) / 2, 
@@ -122,17 +112,46 @@ plot_ranked_facs <- function( ranks.dt,
                    ymax = ylim[1] + .5), 
                fill = 'white', 
                color = NA) +
-    ggsn::scalebar( location = 'bottomleft',
-                    anchor = c( x = latlonrange$xlim[1] + .2, y = latlonrange$ylim[1] + .4), 
+    scale_color_gradient( low = '#dd8747', 
+                          high = '#4C061D', #'#6d213c',
+                          guide = guide_colorbar(title.position = "left"),
+                          name = bquote( atop( .( size.name), 'source impacts, µg'~m^{'-3'}))#,
+                          # expression(paste('2012 total ', SO[2], ' emissions [tons]'))
+                          # ylab( parse( text = 'list(PWSI["i,P"]^{m},~mu*"g"~m^{-3})')) +
+                          # range = c(.5,5.0)
+    ) +
+    expand_limits(color = 0) +
+    theme(
+      plot.title = element_text(size = 16, hjust = 0.5), #element_blank(), #
+      axis.title = element_text(size = 24),
+      axis.text = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      legend.title = element_text(size = 16, vjust = 1, face = 'bold'),
+      legend.title.align = 0,
+      legend.position = "bottom", #c(.22, .15),
+      legend.text = element_text(size = 14, angle = 30, vjust = .5),
+      legend.background = element_rect(fill = 'transparent'),
+      legend.key.size = unit(.04, 'npc'),
+      legend.direction = 'horizontal',
+      strip.text = element_text( size = 20, face = 'bold'),
+      strip.background = element_blank( )
+    )  +
+    ggsn::scalebar( data = ranks.dt.units,
+                    location = 'bottomleft',
+                    anchor = c( x = latlonrange$xlim[1] - 1, y = latlonrange$ylim[1] + 2),
                     x.min = latlonrange$xlim[1],
                     y.min = latlonrange$ylim[1],
                     x.max = latlonrange$xlim[2],
                     y.max = latlonrange$ylim[2],
                     dist = dist.scalebar / 2, 
-                    height = 0.02, 
-                    st.dist = 0.04, 
-                    st.size = 3, 
-                    dd2km = TRUE, 
+                    dist_unit = 'km',
+                    height = 0.05, 
+                    st.dist = 0.1, 
+                    st.size = 4, 
+                    box.fill = c( 'white', 'grey50'),
+                    box.color = 'grey50',
+                    transform = T,
                     model = 'WGS84',
                     facet.var = 'year',
                     facet.lev = as.character( latlonrange.year))
@@ -383,6 +402,37 @@ adjoint_all_pop[, adj_popwgt := sox_exp.adj / pop]
 ## =========================================================== ##
 ## adjoint variability between plume assumptions
 ## =========================================================== ##
+adjoint_all_pop[, adj_popwgt.rank := frank( adj_popwgt), by = .( year, adj.name, state)]
+ranks_US150.hys <- plot_ranked_facs( ranks.dt = adjoint_all_pop,
+                                     rank.name = 'adj_popwgt.rank',
+                                     size.var = 'adj_popwgt',
+                                     toprank = 150,
+                                     geo.name = "United States",
+                                     dist.scalebar = 1000,
+                                     latlonrange.year = 2006
+)
+ranks_US50.adj <- plot_ranked_facs( ranks.dt = adjoint_all_pop,
+                                    state.abbrev = 'US',
+                                    rank.name = 'adj_popwgt.rank',
+                                    size.var = 'adj_popwgt',
+                                    size.name = 'Adjoint population-weighted',
+                                    toprank = 50,
+                                    geo.name = NULL,
+                                    dist.scalebar = 1000,
+                                    latlonrange.year = 2006,
+                                    xlims = c(-123, -68), #ranks_US150.hys$latlonrange$xlim,
+                                    ylims = c(25, 49) #ranks_US150.hys$latlonrange$ylim
+)
+
+save.loc <- '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/'
+ggsave( file = paste0( save.loc, 'PP_locs_2006_2011.png'),
+        plot = ranks_US50.adj$plot,
+        width =  11.5,
+        height = 4)
+
+## =========================================================== ##
+## adjoint variability between plume assumptions
+## =========================================================== ##
 adj.variability.name <- adjoint_all_pop[ , sum( adj_popwgt), 
                                          by = .( adj.name, year, state)]#[state == 'US' & year == 2006]
 adj.variability.name[, fract.V1 := V1 / min(V1)]
@@ -425,7 +475,7 @@ idwex_all <- rbind( idwex_2006, idwex_2011)
 setnames( idwex_all, 'popwgt', 'idwex')
 
 # combine, limit to input states
-states.use <- c( 'PA', 'KY', 'GA', 'WI', 'TX', 'CO', 'CA', 'US')
+states.use <- c( 'US', 'CA', 'CO', 'TX', 'WI', 'KY', 'GA', 'PA')
 rcm_exp <- Reduce(function(...) merge(..., all = TRUE, by = c( 'state_abbr', 'uID', 'year', 'ID')), 
                   list( idwe_all, hyads_all))[ state_abbr %in% states.use]
 rcm_exp[, uID := gsub( '^X', '', uID)]
@@ -442,10 +492,10 @@ ggplot( data = rcm_exp[ state %in% states.use]) +
 ranks_adj_all <- merge( adjoint_all_pop, rcm_exp,
                         by = c( "uID", "year", "state"),
                         all = T, allow.cartesian = TRUE)
-ranks_adj_all[, state.factor := factor(`state`, levels =  c( 'US', 'PA', 'KY', 'GA', 'NY', 'WI', 'TX', 'CO', 'CA'))]
+ranks_adj_all[, state.factor := factor(`state`, levels =  states.use)]
 
 # not looking at the ones with zero
-ranks_adj_all <- ranks_adj_all[ uID != 'tot.sum']
+ranks_adj_all <- ranks_adj_all[ uID != 'tot.sum'][!is.na( adj.name)]
 
 # rank hyads and idwe
 # ranks_adj_all[, `:=` ( hyads.rank  = frankv( `hyads`, order = -1),
@@ -459,121 +509,115 @@ ranks_adj_all <- ranks_adj_all[ uID != 'tot.sum']
 ## =========================================================== ##
 # sum by states
 rcm_statesums <- na.omit( ranks_adj_all[ adj.name == 'initial'])[, 
-                                         .( adj.pw = sum( adj_popwgt),
-                                              idwe.pw    = sum( idwe.pw),
-                                              idwe.mean  = sum( idwe.mean),
-                                              hyads.pw   = sum( hyads.pw),
-                                              hyads.mean = sum( hyads.mean)),
-                                         by = c( 'state', 'year')]
+                                                                 .( adj.pw = sum( adj_popwgt),
+                                                                    idwe.pw    = sum( idwe.pw),
+                                                                    hyads.pw   = sum( hyads.pw)),
+                                                                 by = c( 'state', 'year')]
+rcm_statesums.m <- melt( rcm_statesums, id.vars = c( 'state', 'year', 'adj.pw'))
+rcm_statesums.m[, bias := ( value - adj.pw) / adj.pw]
 
 # load CMAQ data
-load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models2.RData')
+# load( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/hyads_to_cmaq_models3.RData')
 
 # grid-weighted population as raster
-ddm2006.sf <- st_as_sf( rasterToPolygons( dats2006.a$cmaq.ddm))
+# ddm2006.sf <- st_as_sf( rasterToPolygons( dats2006.a$cmaq.ddm))
 
 # get total state populations
-us_states <- st_transform( USAboundaries::us_states(), p4s)
-ddm2006.states <- data.table( st_interpolate_aw( ddm2006.sf, us_states, extensive = F))
+# us_states <- st_transform( USAboundaries::us_states(), p4s)
+# ddm2006.states <- data.table( st_interpolate_aw( ddm2006.sf, us_states, extensive = F))
 
 # merge together
-ddm2006.states[, `:=` ( year = 2006, state = us_states$state_abbr[Group.1], Group.1 = NULL, geometry = NULL)]
-rcm_statesums <- merge( rcm_statesums, ddm2006.states, by = c( 'state', 'year'))
+# ddm2006.states[, `:=` ( year = 2006, state = us_states$state_abbr[Group.1], Group.1 = NULL, geometry = NULL)]
+# rcm_statesums <- merge( rcm_statesums, ddm2006.states, by = c( 'state', 'year'))
 
 # load in model fits
-modfits.annual <- fread( "~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/annual_fields_hyads_idwe.csv", drop = 'V1')
-modfits.annual.c <- dcast( modfits.annual, x + y + year + model ~ field, value.var = 'layer')
+# modfits.annual <- fread( "~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/annual_fields_hyads_idwe.csv", drop = 'V1')
+# modfits.annual.c <- dcast( modfits.annual, x + y + year + model ~ field, value.var = 'layer')
 
 
 ## =========================================================== ##
 ## Mkae plots
 ## =========================================================== ##
+ranks_adj_all.m <- melt( ranks_adj_all[, .( uID, year, state.factor, adj.name, adj_popwgt, hyads.pw, idwe.pw)],
+                         id.vars = c( 'uID', 'year', 'state.factor', 'adj.name', 'adj_popwgt'))
+ranks_adj_all.m[ variable == 'hyads.pw', var.name := 'HyADS']
+ranks_adj_all.m[ variable == 'idwe.pw', var.name := 'IDWE']
+states.use.vert <- c( 'US', 'PA', 'GA', 'KY', 'WI', 'TX', 'CO', 'CA')
+ranks_adj_all.m[, state.factor := factor(`state.factor`, levels =  states.use.vert)]
 
-gghyads.lin <- ggplot( data = ranks_adj_all[adj.name == 'initial' & year %in% c( 2006, 2012)],
+gghyads.lin <- ggplot( data = ranks_adj_all.m[adj.name == 'initial'],
                        aes( x = adj_popwgt,
-                            y = hyads.pw)) +
-  geom_point() +
-  geom_smooth( method = 'lm') +
-  facet_grid( rows = vars( state.factor),
-              cols = vars( year)) +
-  ylab( "HyADS unit PWE") +
-  xlab( "Adjoint unit PWE") +
+                            y = value,
+                            color = var.name)) +
+  geom_point( size = .5) +
+  coord_cartesian( ylim = c( 0, 0.1)) +
+  geom_smooth( method = 'lm', size = .5, fullrange = T, se = F) +
+  scale_color_manual( values = c( '#479ddd', '#dd8747')) +
+  facet_grid( state.factor ~ year) +
+  ylab( parse( text = 'list(PWSI["i,P"]^{m},~mu*"g"~m^{-3})')) +
+  xlab( parse( text = 'list(PWSI["i,P"]^{Adjoint},~mu*"g"~m^{-3})')) +
   theme_bw() + 
-  theme( axis.text.x = element_text( angle = 30,
-                                     vjust = .75))
+  theme( axis.text = element_text( size = 12),
+         axis.title = element_text( size = 16),
+         legend.direction = 'horizontal',
+         legend.position = 'bottom',
+         legend.text = element_text( size = 14),
+         legend.title = element_blank(),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 18))
 
-gghyads.rank <- ggplot( data = ranks_adj_all[adj.name == 'initial' & year %in% c( 2006, 2012)],
-                        aes( x = SOx.rank.adj,
-                             y = hyads.rank)) +
-  geom_point() +
-  # scale_x_continuous( limits = c( 0, 1060)) +
-  # scale_y_continuous( limits = c( 0, 1060)) +
-  geom_smooth( method = 'lm') +
-  facet_grid( rows = vars( state.factor),
-              cols = vars( year)) +
-  ylab( "HyADS unit rank") +
-  xlab( "Adjoint unit rank") +
-  theme_bw() 
+gghyads.lin
+save.loc <- '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Review_JESEE/figures/'
+ggsave( file = paste0( save.loc, 'scatter_annual_2006_2011.png'),
+        plot = gghyads.lin,
+        width =  7 * 1.3,
+        height = 7 * 1.7)
 
-ggIDWE.lin <- ggplot( data = ranks_adj_all[adj.name == 'initial' & year %in% c( 2006, 2012)],
-                      aes( x = adj_popwgt,
-                           y = idwe)) +
-  geom_point() +
-  geom_smooth( method = 'lm') +
-  facet_grid( rows = vars( state.factor),
-              cols = vars( year)) +
-  ylab( "IDWE unit ranks") +
-  xlab( "Adjoint unit ranks") +
-  theme_bw() + 
-  theme( axis.text.x = element_text( angle = 30,
-                                     vjust = .75))
-
-ggIDWE.rank <- ggplot( data = ranks_adj_all[adj.name == 'initial' & year %in% c( 2006, 2012)],
-                       aes( x = SOx.rank.adj,
-                            y = idwe.rank)) +
-  geom_point() +
-  # scale_x_continuous( limits = c( 0, 1060)) +
-  # scale_y_continuous( limits = c( 0, 1060)) +
-  geom_smooth( method = 'lm') +
-  facet_grid( rows = vars( state.factor),
-              cols = vars( year)) +
-  ylab( "HyADS unit rank") +
-  xlab( "Adjoint unit rank") +
-  theme_bw() 
 
 ## =========================================================== ##
-## Plot fraction of emissions vs. exposure fraction
+## Plot in the paper
 ## =========================================================== ##
-eval.hyads <- ranks_adj_all[, eval.fn( hyads.pw, adj_popwgt, 'HyADS'), by = .( state, year, adj.name)]
-eval.idwe  <- ranks_adj_all[, eval.fn( idwe.pw, adj_popwgt, 'IDWE'), by = .( state, year, adj.name)]
+eval.hyads <- ranks_adj_all[, eval.fn( hyads.pw, adj_popwgt, 'HyADS'), by = .( state.factor, year, adj.name)]
+eval.idwe  <- ranks_adj_all[, eval.fn( idwe.pw, adj_popwgt, 'IDWE'), by = .( state.factor, year, adj.name)]
 eval.all <- rbind( eval.hyads, eval.idwe)
 
 # melt
-eval.all.m <- melt( eval.all, id.vars = c( 'state', 'year', 'adj.name', 'mod.name'),
+eval.all.m <- melt( eval.all, id.vars = c( 'state.factor', 'year', 'adj.name', 'mod.name'),
                     variable.name = 'metric')
+
+# redefine metric names
+eval.all.m[metric == 'R.p', metric := 'Pearson~R']
+eval.all.m[metric == 'R.s', metric := 'Spearman~R']
 
 ## define adjoint names, set up for plotting
 adj.names <- data.table( adj.name = c( "initial", "layers_2-5", "stack_height", "stack_height_plus1", "stack_height_plus2"),
                          adj.name.adjust = c("Average", "Layers 2-5", "Stack Height", "Stack Height +1", "Stack Height +2"))
 corrs.all <- merge( eval.all.m, adj.names, by = 'adj.name')
-corrs.all[, state.factor := factor(`state`, levels = c( 'US', 'CA', 'CO', 'TX', 'WI', 'NY', 'GA', 'KY', 'PA'))]
+corrs.all[, state.factor := factor( state.factor, levels = states.use)]
 
-ggcorrs <- ggplot( data = corrs.all,
-                   aes( x = state.factor,
-                        y = value,
-                        color = mod.name,
-                        shape = adj.name.adjust
-                   )) +
+# don't plot very high NME for CA and CO
+cors.all.use <- corrs.all[ metric %in% c( 'Pearson~R', 'NMB', 'RMSE')]
+corrs.removed <- cors.all.use[ state.factor %in% c( 'CA', 'CO') & value > 2]
+cors.all.use[ state.factor %in% c( 'CA', 'CO') & value > 2, value := NA]
+cors.all.use[ metric == 'NMB', value := value * 100]
+cors.all.use[ metric == 'NMB', metric := 'NMB~"%"']
+cors.all.use[ metric == 'RMSE', metric := 'RMSE~mu*"g"~m^{-3}']
+gguse <- ggplot( data = cors.all.use,
+                 aes( x = state.factor,
+                      y = value,
+                      color = mod.name,
+                      shape = adj.name.adjust
+                 )) +
+  geom_hline( yintercept = 0) +
   geom_point( size = 4,
               position = position_dodge( width = .25)) + 
   scale_shape_manual( values = c( 0:2, 5:6)) +
   scale_color_manual( values = c( '#479ddd', '#dd8747')) +
   geom_vline( xintercept = 1.5,
               lty = 2) +
-  facet_grid( rows = vars( metric),
-              cols = vars( year), scales = 'free_y') +
+  facet_grid( metric ~ year, scales = 'free_y', labeller = label_parsed) +
   expand_limits( y = 0) +
-  # scale_y_continuous( limits = c( 0.00, 1)) + 
+  scale_y_continuous( expand = expansion( .1)) +
   guides(
     color = guide_legend(order = 1,
                          keywidth = 1.5),
@@ -582,8 +626,7 @@ ggcorrs <- ggplot( data = corrs.all,
   ) +
   theme_bw() +
   theme( axis.text = element_text( size = 12),
-         axis.title = element_text( size = 18),
-         axis.title.x = element_blank(),
+         axis.title = element_blank( ),
          legend.direction = 'horizontal',
          legend.position = 'bottom',
          legend.text = element_text( size = 12),
@@ -594,23 +637,61 @@ ggcorrs <- ggplot( data = corrs.all,
          strip.background = element_blank(),
          strip.text = element_text( size = 18))
 
-ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/figures/corrs_adjoints_heights_2006_2011.png',
-        ggcorrs,
-        width  = 8 * 1.1,
-        height = 5 )
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/mixed_adjoints_heights_2006_2011.png',
+        gguse,
+        width  = 8 * 1.2,
+        height = 7 )
 
-
-corrs.all[adj.name == 'initial' & state == 'US']
-corrs.all[adj.name == 'initial' & state %in% c( 'KY', 'PA', 'GA')]
 
 ## =========================================================== ##
 ## Check out average distance metric
 ## =========================================================== ##
-ave_distances <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS/unit_rankings/ave_distances.csv')
-ave_distances[, state.factor := factor(`state`, levels = c( 'US', 'CA', 'CO', 'TX', 'WI', 'NY', 'GA', 'KY', 'PA'))]
-ave_distances[, `:=` (avedist.pew.relative = avedist.pew / ave_distances[state == 'US']$avedist.pew,
-                      avehyads.pew.relative = avehyads.pew / ave_distances[state == 'US']$avehyads.pew)]
+# read sox inverse distance and population, housekeeping
+sox_inv_dist06 <- fread('~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2006_unit.csv', drop = 'V1')
+pop06 <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/population/hyads_grid_population.csv', drop = c( 'V1', '2011'))
+sox_inv_dist06.m <- melt( sox_inv_dist06[,!(names(sox_inv_dist06) %in% 'tot.sum'), with = F], id.vars = c( 'x', 'y'), variable.name = 'uID')
+sox_inv_dist06.m[, uID := gsub( '^X', '', uID)]
 
+#merge with units and population
+units <- hyspdisp::units2006
+sox_inv_dist06.m2 <- merge( units[, .(uID, SOx)], sox_inv_dist06.m, by = 'uID')
+sox_inv_dist06.m2 <- merge( sox_inv_dist06.m2, pop06, by = c( 'x', 'y'))
+
+#lculate distance, "Inf" dist interpreted as zero
+sox_inv_dist06.m2[, dist := SOx / ( value)]
+sox_inv_dist06.m2[ is.nan( dist), dist := 0]
+sox_inv_dist06.m2[, numerator := SOx * dist * `2006`]
+sox_inv_dist06.m2[, denominator := SOx * `2006`]
+
+# sum by locations
+sox_inv_dist06.dt <- sox_inv_dist06.m2[, .( Numerator = sum( numerator),
+                                            Denominator = sum( denominator)), by = .( x, y)]
+
+sox_inv_dist06.r <- rasterFromXYZ( sox_inv_dist06.dt)
+plot( sox_inv_dist06.r$Numerator / sox_inv_dist06.r$Denominator)
+Dpew.all <- sox_inv_dist06.r$Numerator / sox_inv_dist06.r$Denominator
+ggplot.a.raster( Dpew.all, facet.names = 'layer')
+
+# assign states
+# get usa mask for masking
+# download USA polygon from rnaturalearth
+us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
+us_states <- st_transform( USAboundaries::us_states(), p4s)
+mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
+mask.r <- rasterize( mask.usa[,'state_abbr'], Dpew.all)
+
+# put back to dt and average by states
+Dpew.all$ID <- mask.r$layer
+mask.a <- levels( mask.r)[[1]]
+Dpew.dt <- data.table( values( Dpew.all))[! is.na( ID)]
+Dpew.dt <- merge( Dpew.dt, mask.a, by = 'ID')
+
+# format for plotting, calculate Dpew
+states.dpew <- c( 'US', 'CA', 'CO', 'TX', 'WI', 'GA', 'KY', 'PA')
+ave_distances <- Dpew.dt[, .( avedist.pew = mean( layer, rm.na = T) / 1000), by = state_abbr]
+ave_distances.all <- Dpew.dt[, .( avedist.pew = mean( layer, na.rm = T) / 1000, state_abbr = 'US')]
+ave_distances <- rbind( ave_distances, ave_distances.all)[state_abbr %in% states.dpew]
+ave_distances[, state.factor := factor(`state_abbr`, levels = states.dpew)]
 
 gg_avedist <- ggplot( data = ave_distances,
                       aes( x = state.factor,
@@ -631,37 +712,165 @@ gg_avedist <- ggplot( data = ave_distances,
          panel.grid.major.x = element_blank())
 
 
-ave_distances.m <- melt( ave_distances,
-                         id.vars = 'state.factor',
-                         measure.vars = c( 'avedist.pew.relative',
-                                           'avehyads.pew.relative'))
-gg_avedist.rel <- ggplot( data = ave_distances.m,
-                          aes( x = state.factor,
-                               y = value,
-                               fill = variable)) + 
-  geom_col( width = .6,
-            position = position_dodge2()) + 
-  labs( y = expression( paste( D^{pew}, ' & ', H^{pew}, ' relative to US'))) +
-  geom_vline( xintercept = 1.5,
-              lty = 2) +
-  theme_bw( ) + 
-  theme( axis.title = element_text( size = 18),
-         axis.title.x = element_blank(),
-         axis.text = element_text( size = 12),
-         panel.grid.major.x = element_blank())
 
 
-
-gg_combine <- plot_grid(ggcorrs, gg_avedist,
-                        rel_heights = c( 3, 1),
+gg_combine <- plot_grid(gguse, gg_avedist,
+                        rel_heights = c( 4, 1),
                         labels = NULL, ncol = 1, 
                         align = 'hv', axis = 'lr') 
 
-ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/figures/corrs_adjoints_heights_2006_2011_dists.png',
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/eval_dists_2006_2011.png',
         gg_combine,
-        width  = 8 * 1.1,
-        height = 5 * 1.3)
+        width  = 8 * 1.3,
+        height = 5 * 1.5)
+## =========================================================== ##
+## Plot in the SI
+## =========================================================== ##
+cors.all.SI <- corrs.all[ metric %in% c( 'Spearman~R', 'NME', 'MB')]
+corrs.removed.SI <- cors.all.SI[ state.factor %in% c( 'CA', 'CO') & value > 2]
+cors.all.SI[ state.factor %in% c( 'CA', 'CO') & value > 2, value := NA]
+cors.all.SI[ metric == 'NME', value := value * 100]
+cors.all.SI[ metric == 'NME', metric := 'NME~"%"']
+cors.all.SI[ metric == 'MB', metric := 'MB~mu*"g"~m^{-3}']
 
+ggSI <- ggplot( data = cors.all.SI,
+                aes( x = state.factor,
+                     y = value,
+                     color = mod.name,
+                     shape = adj.name.adjust
+                )) +
+  geom_hline( yintercept = 0) +
+  geom_point( size = 4,
+              position = position_dodge( width = .25)) + 
+  scale_shape_manual( values = c( 0:2, 5:6)) +
+  scale_color_manual( values = c( '#479ddd', '#dd8747')) +
+  geom_vline( xintercept = 1.5,
+              lty = 2) +
+  facet_grid( metric ~ year, scales = 'free_y', labeller = label_parsed) +
+  expand_limits( y = 0) +
+  scale_y_continuous( expand = expand_scale( mult = c( .1))) +
+  guides(
+    color = guide_legend(order = 1,
+                         keywidth = 1.5),
+    shape = guide_legend(order = 0,
+                         keywidth = 1.5)
+  ) +
+  theme_bw() +
+  theme( axis.text = element_text( size = 12),
+         axis.title = element_blank( ),
+         legend.direction = 'horizontal',
+         legend.position = 'bottom',
+         legend.text = element_text( size = 12),
+         legend.title = element_blank(),
+         panel.grid.major.x = element_line( size = 10,
+                                            color = 'grey90'),
+         panel.grid.minor = element_blank(),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 18))
+ggSI
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/SI_adjoints_heights_2006_2011.png',
+        ggSI,
+        width  = 8 * 1.2,
+        height = 6 )
+
+## =========================================================== ##
+## Old figures
+## =========================================================== ##
+ggNM <- ggplot( data = corrs.all[ metric %in% c( 'NME', 'NMB')],
+                aes( x = state.factor,
+                     y = value,
+                     color = mod.name,
+                     shape = adj.name.adjust
+                )) +
+  scale_y_continuous( limits = c( NA, 1), labels = scales::percent_format(accuracy = 1),
+                      expand = expand_scale( mult = c( .1))) + 
+  geom_hline( yintercept = 0) +
+  geom_point( size = 4,
+              position = position_dodge( width = .25)) + 
+  scale_shape_manual( values = c( 0:2, 5:6)) +
+  scale_color_manual( values = c( '#479ddd', '#dd8747')) +
+  geom_vline( xintercept = 1.5,
+              lty = 2) +
+  facet_grid( metric ~ year, scales = 'free_y') +
+  expand_limits( y = 0) +
+  # scale_y_continuous( limits = c( 0.00, 1)) + 
+  guides(
+    color = guide_legend(order = 1,
+                         keywidth = 1.5),
+    shape = guide_legend(order = 0,
+                         keywidth = 1.5)
+  ) +
+  theme_bw() +
+  theme( axis.text = element_text( size = 12),
+         axis.title = element_blank( ),
+         legend.direction = 'horizontal',
+         legend.position = 'bottom',
+         legend.text = element_text( size = 12),
+         legend.title = element_blank(),
+         panel.grid.major.x = element_line( size = 10,
+                                            color = 'grey90'),
+         panel.grid.minor = element_blank(),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 18))
+
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Review_JESEE/figures/NM_adjoints_heights_2006_2011.png',
+        ggNM,
+        width  = 8 * 1.2,
+        height = 5 )
+
+ggMB <- ggplot( data = corrs.all[ metric %in% c( 'MB', 'RMSE')],
+                aes( x = state.factor,
+                     y = value,
+                     color = mod.name,
+                     shape = adj.name.adjust
+                )) +
+  scale_y_continuous( limits = c( NA, NA), expand = expand_scale( mult = c( .1))) + 
+  geom_hline( yintercept = 0) +
+  geom_point( size = 4,
+              position = position_dodge( width = .25)) + 
+  scale_shape_manual( values = c( 0:2, 5:6)) +
+  scale_color_manual( values = c( '#479ddd', '#dd8747')) +
+  geom_vline( xintercept = 1.5,
+              lty = 2) +
+  facet_grid( metric ~ year, scales = 'free_y') +
+  expand_limits( y = 0) +
+  # scale_y_continuous( limits = c( 0.00, 1)) + 
+  guides(
+    color = guide_legend(order = 1,
+                         keywidth = 1.5),
+    shape = guide_legend(order = 0,
+                         keywidth = 1.5)
+  ) +
+  theme_bw() +
+  theme( axis.text = element_text( size = 12),
+         axis.title = element_blank( ),
+         legend.direction = 'horizontal',
+         legend.position = 'bottom',
+         legend.text = element_text( size = 12),
+         legend.title = element_blank(),
+         panel.grid.major.x = element_line( size = 10,
+                                            color = 'grey90'),
+         panel.grid.minor = element_blank(),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 18))
+
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Review_JESEE/figures/MB_adjoints_heights_2006_2011.png',
+        ggMB,
+        width  = 8 * 1.2,
+        height = 5 )
+
+
+corrs.all[adj.name == 'initial' & state.factor == 'US']
+corrs.all[adj.name == 'initial' & state %in% c( 'KY', 'PA', 'GA')]
+
+summary( corrs.all[state.factor == 'US' & metric == 'NMB' & mod.name == 'HyADS'])
+summary( corrs.all[state.factor == 'US' & metric == 'RMSE' & mod.name == 'HyADS'])
+summary( corrs.all[state.factor == 'US' & metric == 'NMB' & mod.name == 'IDWE'])
+summary( corrs.all[state.factor == 'US' & metric == 'RMSE' & mod.name == 'IDWE'])
+summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'NMB' & mod.name == 'IDWE'])
+summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'NMB' & mod.name == 'HyADS'])
+summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'RMSE' & mod.name == 'HyADS'])
+summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'RMSE' & mod.name == 'IDWE'])
 ## =========================================================== ##
 ## Plot fraction of emissions vs. exposure fraction
 ## =========================================================== ##
