@@ -252,6 +252,10 @@ ggsave( file = paste0( save.loc, 'NMB_monthly_2006_2011.png'),
         height = 7 * 1.7)
 summary( units_month.state.m[metric %in% c( 'NMB') & model == 'Model 5' & state_abbr == 'CA'])
 summary( units_month.state.m[metric %in% c( 'NMB') & model == 'Model 5' & state_abbr == 'CO'])
+summary( units_month.state.m[metric %in% c( 'NMB') & model == 'Model 5' & state_abbr == 'US'])
+summary( units_month.state.m[metric %in% c( 'NMB') & model == 'Model 5' & state_abbr == 'PA'])
+summary( units_month.state.m[metric %in% c( 'NMB') & model == 'Model 5' & state_abbr == 'GA'])
+summary( units_month.state.m[metric %in% c( 'NMB') & model == 'Model 5' & state_abbr == 'KY'])
 
 # plot normalized mean error/bias
 ggNME <- ggplot( data = units_month.state.m[metric %in% c( 'NME') & model == 'Model 5'],

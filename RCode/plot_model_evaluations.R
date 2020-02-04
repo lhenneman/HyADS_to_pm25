@@ -68,28 +68,39 @@ ggplot.a.raster( unstack( stack( sum( subset( preds.ann.idwe06w05$Y.ho.terms.gam
 metrics.ann <- rbind( preds.ann.hyads06w05$metrics[, mod.inpt := 'HyADS'],
                       preds.ann.idwe06w05$metrics[, mod.inpt := 'IDWE'])
 metrics.ann.m <- melt( metrics.ann, id.vars = c( 'mod.name', 'mod.inpt'))
+metrics.ann.m[ variable == 'R', variable := 'Pearson R']
+metrics.ann.m[ variable == 'R.s', variable := 'Spearman R']
 
 # get units and acronyms
-mod.names <- data.table( mod.name = c( "lm.cv", "lm.ncv", "gam.cv", "adj.mean", "adj.Z", "adj.Z.only"),
-                         model.names = c( "Linear\nControlled", "Linear\nUncontrolled", 
-                                          "General Additive\nModel", "Mean\nModel", "Z Score]\nModel", "adj.Z.only"))
+mod.names <- data.table( mod.name = c( "lm.cv", "lm.ncv", "gam.cv", "adj.Z"),
+                         model.names = c( "Linear", "Linear\nUncontrolled", 
+                                          "GAM", "Z Score\nModel"))
 
-ggplot( data = metrics.ann.m[ !(mod.name %in% c( 'adj.mean', 'adj.Z.only'))]) + 
+metrics.ann.m <- merge( mod.names, metrics.ann.m, by = 'mod.name')
+
+mod.eval <- ggplot( data = metrics.ann.m[ !(mod.name %in% c( 'adj.mean', 'adj.Z.only'))]) + 
   geom_hline( yintercept = 0) +
-  geom_point( aes( x = mod.name, y = value, 
+  geom_point( aes( x = model.names, y = value, 
                    color = mod.inpt, fill = mod.inpt),
-              pch = 3, size = 3, position = position_dodge( width = .25)) + 
+              pch = 3, size = 3, stroke = 2, position = position_dodge( width = .4)) + 
   facet_wrap( . ~ variable, ncol = 1, scales = 'free_y') + 
   scale_y_continuous( expand = expansion( mult = c( .4))) + 
   theme_bw() + 
   theme( axis.title = element_blank(),
+         axis.text.x = element_text( size = 12),
+         axis.text.y = element_text( size = 12),
          legend.title = element_blank(),
+         legend.text = element_text( size = 12),
          legend.position = 'bottom',
-         panel.grid.major.x = element_line( size = 10),
+         panel.grid.major.x = element_line( size = 16),
          panel.grid.minor = element_blank(),
          strip.background = element_rect( fill = NA),
-         strip.text = element_text( size = 12))
+         strip.text = element_text( size = 14))
 
-
+mod.eval
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/cmaq-ddm_modelevals.png',
+        mod.eval,
+        width  = 6,
+        height = 8 )
 
 

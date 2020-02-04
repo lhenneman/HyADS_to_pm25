@@ -425,10 +425,10 @@ ranks_US50.adj <- plot_ranked_facs( ranks.dt = adjoint_all_pop,
 )
 
 save.loc <- '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/'
-ggsave( file = paste0( save.loc, 'PP_locs_2006_2011.png'),
-        plot = ranks_US50.adj$plot,
-        width =  11.5,
-        height = 4)
+# ggsave( file = paste0( save.loc, 'PP_locs_2006_2011.png'),
+#         plot = ranks_US50.adj$plot,
+#         width =  11.5,
+#         height = 4)
 
 ## =========================================================== ##
 ## adjoint variability between plume assumptions
@@ -462,6 +462,18 @@ hyads_2011 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_diff2011_3
 hyads_all <- rbind( hyads_2006, hyads_2011)
 setnames( hyads_all, c( 'popwgt', 'mean_pm'), c( 'hyads.pw', 'hyads.mean'))
 
+# raw IDWE
+idwe_2006raw <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_raw2006_3.csv'), drop = dropcols)
+idwe_2011raw <- fread( file.path( exp_home_annual, 'popwgt_idwe_annual_raw2011_3.csv'), drop = dropcols)
+idwe_allraw <- rbind( idwe_2006raw, idwe_2011raw)[uID != 'Xtot.sum']
+setnames( idwe_allraw, c( 'popwgt', 'mean_pm'), c( 'idwe.raw.pw', 'idwe.raw.mean'))
+
+# raw HyADS
+hyads_2006raw <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_raw2006_3.csv'), drop = dropcols)
+hyads_2011raw <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual_raw2011_3.csv'), drop = dropcols)
+hyads_allraw <- rbind( hyads_2006raw, hyads_2011raw)
+setnames( hyads_allraw, c( 'popwgt', 'mean_pm'), c( 'hyads.raw.pw', 'hyads.raw.mean'))
+
 # hyads xgboost
 hyadsx_2006 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual2006_xb.csv'), drop = dropcols)
 hyadsx_2011 <- fread( file.path( exp_home_annual, 'popwgt_hyads_annual2011_xb.csv'), drop = dropcols)
@@ -480,6 +492,12 @@ rcm_exp <- Reduce(function(...) merge(..., all = TRUE, by = c( 'state_abbr', 'uI
                   list( idwe_all, hyads_all))[ state_abbr %in% states.use]
 rcm_exp[, uID := gsub( '^X', '', uID)]
 setnames( rcm_exp, 'state_abbr', 'state')
+
+# combine raw, limit to input states
+rcm_expraw <- Reduce(function(...) merge(..., all = TRUE, by = c( 'state_abbr', 'uID', 'year', 'ID')), 
+                  list( idwe_allraw, hyads_allraw))[ state_abbr %in% states.use]
+rcm_expraw[, uID := gsub( '^X', '', uID)]
+setnames( rcm_expraw, 'state_abbr', 'state')
 
 
 ggplot( data = rcm_exp[ state %in% states.use]) +
@@ -568,10 +586,10 @@ gghyads.lin <- ggplot( data = ranks_adj_all.m[adj.name == 'initial'],
 
 gghyads.lin
 save.loc <- '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Review_JESEE/figures/'
-ggsave( file = paste0( save.loc, 'scatter_annual_2006_2011.png'),
-        plot = gghyads.lin,
-        width =  7 * 1.3,
-        height = 7 * 1.7)
+# ggsave( file = paste0( save.loc, 'scatter_annual_2006_2011.png'),
+#         plot = gghyads.lin,
+#         width =  7 * 1.3,
+#         height = 7 * 1.7)
 
 
 ## =========================================================== ##
@@ -637,10 +655,10 @@ gguse <- ggplot( data = cors.all.use,
          strip.background = element_blank(),
          strip.text = element_text( size = 18))
 
-ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/mixed_adjoints_heights_2006_2011.png',
-        gguse,
-        width  = 8 * 1.2,
-        height = 7 )
+# ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/mixed_adjoints_heights_2006_2011.png',
+#         gguse,
+#         width  = 8 * 1.2,
+#         height = 7 )
 
 
 ## =========================================================== ##
@@ -667,11 +685,6 @@ sox_inv_dist06.m2[, denominator := SOx * `2006`]
 sox_inv_dist06.dt <- sox_inv_dist06.m2[, .( Numerator = sum( numerator),
                                             Denominator = sum( denominator)), by = .( x, y)]
 
-sox_inv_dist06.r <- rasterFromXYZ( sox_inv_dist06.dt)
-plot( sox_inv_dist06.r$Numerator / sox_inv_dist06.r$Denominator)
-Dpew.all <- sox_inv_dist06.r$Numerator / sox_inv_dist06.r$Denominator
-ggplot.a.raster( Dpew.all, facet.names = 'layer')
-
 # assign states
 # get usa mask for masking
 # download USA polygon from rnaturalearth
@@ -679,6 +692,7 @@ us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
 us_states <- st_transform( USAboundaries::us_states(), p4s)
 mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
 mask.r <- rasterize( mask.usa[,'state_abbr'], Dpew.all)
+
 
 # put back to dt and average by states
 Dpew.all$ID <- mask.r$layer
@@ -723,6 +737,39 @@ ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE
         gg_combine,
         width  = 8 * 1.3,
         height = 5 * 1.5)
+
+
+## =========================================================== ##
+# plot Dpew
+## =========================================================== ##
+sox_inv_dist06.r <- rasterFromXYZ( sox_inv_dist06.dt)
+plot( sox_inv_dist06.r$Numerator / sox_inv_dist06.r$Denominator)
+Dpew.all <- sox_inv_dist06.r$Numerator / sox_inv_dist06.r$Denominator
+Dpes.all <- focal( Dpew.all, w = matrix( 1, 3, 3), fun = mean, NAonly = T, na.rm = T)
+
+# state shapefile
+mask.usa.st <- data.table( st_as_sf(mask.usa))
+
+
+# make the plot
+gg.dpew <- ggplot.a.raster( Dpes.all / 1000, facet.names = "layer", mask.raster = mask.usa,
+                 legend.name = expression( D^{'pew'}~'km'),
+                 theme.obj = theme( legend.key.width = unit( 0.1, 'npc'),
+                                    strip.text = element_blank())) + 
+  scale_fill_viridis( direction = -1,
+                      name = expression( D^{'pew'}~'[km]')) + 
+  geom_sf( data = mask.usa.st, aes( geometry = geometry), fill = NA, color = 'grey70') +
+  geom_sf_label( data = mask.usa.st[state_abbr %in% states.dpew], aes( label = state_abbr,
+                                                                       geometry = geometry))
+
+  
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/Dpew.png',
+        gg.dpew,
+        width  = 7,
+        height = 5)
+
+
+
 ## =========================================================== ##
 ## Plot in the SI
 ## =========================================================== ##
@@ -871,6 +918,82 @@ summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'NMB' & mo
 summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'NMB' & mod.name == 'HyADS'])
 summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'RMSE' & mod.name == 'HyADS'])
 summary( corrs.all[state.factor %in% c( 'KY', 'PA', 'GA') & metric == 'RMSE' & mod.name == 'IDWE'])
+
+
+## =========================================================== ##
+## correlations of raw hyads/idwe
+## =========================================================== ##
+ranks_adj_allraw <- merge( adjoint_all_pop, rcm_expraw,
+                        by = c( "uID", "year", "state"),
+                        all = T, allow.cartesian = TRUE)
+ranks_adj_allraw[, state.factor := factor(`state`, levels =  states.use)]
+
+# not looking at the ones with zero
+ranks_adj_allraw <- ranks_adj_allraw[ uID != 'tot.sum'][!is.na( adj.name)]
+
+eval.hyadsraw <- ranks_adj_allraw[, eval.fn( hyads.raw.pw, adj_popwgt, 'HyADS'), by = .( state.factor, year, adj.name)]
+eval.idweraw  <- ranks_adj_allraw[, eval.fn( idwe.raw.pw, adj_popwgt, 'IDWE'), by = .( state.factor, year, adj.name)]
+eval.allraw <- rbind( eval.hyadsraw, eval.idweraw)
+
+# melt
+eval.all.m <- melt( eval.allraw, id.vars = c( 'state.factor', 'year', 'adj.name', 'mod.name'),
+                    variable.name = 'metric')
+
+# redefine metric names
+eval.all.m[metric == 'R.p', metric := 'Pearson~R']
+eval.all.m[metric == 'R.s', metric := 'Spearman~R']
+
+## define adjoint names, set up for plotting
+adj.names <- data.table( adj.name = c( "initial", "layers_2-5", "stack_height", "stack_height_plus1", "stack_height_plus2"),
+                         adj.name.adjust = c("Average", "Layers 2-5", "Stack Height", "Stack Height +1", "Stack Height +2"))
+corrs.all <- merge( eval.all.m, adj.names, by = 'adj.name')
+corrs.all[, state.factor := factor( state.factor, levels = states.use)]
+
+# don't plot very high NME for CA and CO
+cors.all.use <- corrs.all[ metric %in% c( 'Pearson~R', 'Spearman~R')]
+gguseraw <- ggplot( data = cors.all.use,
+                 aes( x = state.factor,
+                      y = value,
+                      color = mod.name,
+                      shape = adj.name.adjust
+                 )) +
+  geom_hline( yintercept = 0) +
+  geom_point( size = 4,
+              position = position_dodge( width = .25)) + 
+  scale_shape_manual( values = c( 0:2, 5:6)) +
+  scale_color_manual( values = c( '#479ddd', '#dd8747')) +
+  geom_vline( xintercept = 1.5,
+              lty = 2) +
+  facet_grid( metric ~ year, scales = 'free_y', labeller = label_parsed) +
+  expand_limits( y = 0) +
+  scale_y_continuous( expand = expansion( .1)) +
+  guides(
+    color = guide_legend(order = 1,
+                         keywidth = 1.5),
+    shape = guide_legend(order = 0,
+                         keywidth = 1.5)
+  ) +
+  theme_bw() +
+  theme( axis.text = element_text( size = 12),
+         axis.title = element_blank( ),
+         legend.direction = 'horizontal',
+         legend.position = 'bottom',
+         legend.text = element_text( size = 12),
+         legend.title = element_blank(),
+         panel.grid.major.x = element_line( size = 10,
+                                            color = 'grey90'),
+         panel.grid.minor = element_blank(),
+         strip.background = element_blank(),
+         strip.text = element_text( size = 18))
+
+ggsave( file = '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/Revision_JESEE/figures/raw_correlations_2006_2011.png',
+        gguseraw,
+        width  = 8 * 1.2,
+        height = 7 * .8)
+
+
+
+
 ## =========================================================== ##
 ## Plot fraction of emissions vs. exposure fraction
 ## =========================================================== ##

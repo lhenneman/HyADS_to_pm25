@@ -707,14 +707,16 @@ month.trainer <- function( name.m = names( mets2005.m)[1],
 #======================================================================#
 project_and_stack <- function( ..., mask.use = NULL){
   list.r <- list( ...)
-  for( r in 2: length( list.r)){
-    list.r[[r]] <- projectRaster( list.r[[r]], list.r[[1]], alignOnly = F)
-  }
+  
+  if( length( list.r) > 1)
+    for( r in 2: length( list.r)){
+      list.r[[r]] <- projectRaster( list.r[[r]], list.r[[1]], alignOnly = F)
+    }
   
   # mask over usa
   if( !is.null( mask.use)){
     mask.use <- spTransform( mask.use, crs( list.r[[1]]))
-    mask_crop <- rasterize( mask.use, list.r[[1]], getCover=TRUE)
+    mask_crop <- rasterize( mask.use, list.r[[1]][[1]], getCover=TRUE)
     mask_crop[mask_crop==0] <- NA
     mask_crop[!is.na( mask_crop)] <- 1
     
@@ -913,7 +915,7 @@ state_exposurer <- function(
   
   # divide by total population
   pred_popwgt.out[, `:=` ( popwgt = mean_popwgt / pop_amnt,
-                          month = name.Date)]
+                           month = name.Date)]
   
   # merge pop-weighted and raw dataset
   out <- merge( pred_popwgt.out, pred_pm, by = c( 'state_abbr', 'ID', 'uID'))
@@ -935,7 +937,8 @@ state_exposurer.year <- function(
   grid_pop.r = grid_popwgt.r,
   state_pops = copy( us_states.pop.dt),
   take.diff = F,
-  xboost = F
+  xboost = F,
+  raw = F
 ){
   message( paste( 'Converting', year.m))
   
@@ -974,26 +977,32 @@ state_exposurer.year <- function(
   dat.coords <- coordinates( dat.a)
   dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
   
-  # xboost requires special treatment
-  if( xboost){
-    dat_raw0.dt.trim <- dat_raw0.dt[, model.use$feature_names, with = F]
-    xhold1c <- xgb.DMatrix( as.matrix( dat_raw0.dt.trim))
-    dat.pred0 <- predict( model.use, newdata = xhold1c)
-  } else
-    dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  # do the prediction if not taking raw values
+  if( !raw){
+    # xboost requires special treatment
+    if( xboost){
+      dat_raw0.dt.trim <- dat_raw0.dt[, model.use$feature_names, with = F]
+      xhold1c <- xgb.DMatrix( as.matrix( dat_raw0.dt.trim))
+      dat.pred0 <- predict( model.use, newdata = xhold1c)
+    } else
+      dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+    
+    dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
+  } else{
+    dats0.r <- rasterFromXYZ( dat_raw0.dt[, c( 'x', 'y', name.dat), with = F], crs = p4s)
+  }
   
-  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
   
   # do the predictions
   pred_pm.r <- brick( pbmcapply::pbmclapply( x.n, function( n){ 
     gc()
+    # if zero impacts, return raster with only zeros
+    if( sum( values(x.proj[[n]]), na.rm = T) == 0 | raw)
+      return( x.proj[[n]])
+    
     # assign unit to prediction dataset
     dat.use <- copy( dat.a)
     dat.use[[name.dat]] <- x.proj[[n]]
-    
-    # if zero impacts, return raster with only zeros
-    if( sum( values(x.proj[[n]]), na.rm = T) == 0)
-      return( x.proj[[n]])
     
     # set up the dataset
     dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
@@ -1061,7 +1070,7 @@ state_exposurer.year <- function(
   pop.tot <- data.table( state_abbr = 'US', pop_amnt = sum( state_pops$pop_amnt))
   state_pops_lite <- rbind( state_pops_lite, pop.tot)
   pred_popwgt.out <- merge( pred_pm.pw, state_pops_lite, by = 'state_abbr')
-
+  
   # divide by total population
   pred_popwgt.out[, `:=` (popwgt = mean_popwgt / pop_amnt,
                           year = year.m)]
@@ -1087,4 +1096,192 @@ evals.fn <- function( Yhat, Yact){
                          R.p = cor( Yhat, Yact, method = 'pearson'),
                          R.s = cor( Yhat, Yact, method = 'spearman'))
   return( metrics)
+}
+
+#======================================================================#
+## function for converting individual unit concentrations to ugm3
+# inputs - filename of grid w/ unit or summed impacts
+#        - model
+#        - covariate raster
+#        - 'x' name in the raster from model
+# 
+# output - data table of state, pop-wgted impact for all input units
+#======================================================================#
+hyads_to_pm25 <- function( 
+  month.n = NULL,
+  fstart,
+  year.m = 2006,
+  model.dataset = preds.mon.idwe06w05,
+  model.name = 'model.cv', #'model.gam'
+  name.x = 'idwe',
+  mask.use = mask.usa,
+  ddm.m = ddm.m.all,
+  mets.m = mets.m.all,
+  emiss.m = d_nonegu.r,
+  idwe.m. = idwe.m,
+  hyads.m = hyads.m.all,
+  take.diff = T
+){
+  message( paste( 'Converting', month.name[month.n]))
+  
+  month.N <- formatC( month.n, width = 2, flag = '0')
+  name.m <- paste0( 'X', year.m, '.', month.N, '.01')
+  model.m <- paste0( 'X2005.', month.N, '.01')
+  popyr.name <- paste0( 'X', year.m)
+  name.Date <- as.Date( name.m, format = 'X%Y.%m.%d')
+  
+  if( name.x == 'idwe'){
+    fname <- paste0( fstart, year.m, '_', month.n, '.csv')
+    name.dat <- 'idwe'
+  } else{
+    fname <- paste0( fstart, year.m, '_', month.N, '.csv')
+    name.dat <- 'hyads'
+  }
+  
+  # create prediction dataset
+  # ddm.use.p <- ddm.m[[name.m]]
+  mets.use.p <- mets.m[[name.m]]
+  idwe.use.p <- idwe.m.[[name.m]]
+  hyads.use.p <- hyads.m[[name.m]]
+  
+  # fix names
+  # names( ddm.use.p)   <- 'cmaq.ddm'
+  names( hyads.use.p) <- 'hyads'
+  names( idwe.use.p) <- 'idwe'
+  
+  # rename population raster
+  grid_pop.r <- grid_pop.r[[popyr.name]]
+  names( grid_pop.r) <- 'pop'
+  
+  dat.s <- project_and_stack( #ddm.use.p,   
+    hyads.use.p,   idwe.use.p,   
+    mets.use.p, emiss.m, grid_pop.r, mask.use = mask.use)
+  
+  # assign state names to raster
+  mask.r <- rasterize( mask.use[,'state_abbr'], dat.s[[1]])
+  mask.a <- levels( mask.r)[[1]]
+  dat.s$ID <- mask.r
+  
+  # read in, remove 
+  x.in1 <- fread( fname, drop = c( 'V1'))
+  x.in1[is.na( x.in1)] <- 0
+  suppressWarnings( x.in1[, `:=` ( yearmon = NULL, yearmonth = NULL)])
+  x.in2 <- x.in1[, colSums(x.in1) != 0, with = F]
+  suppressWarnings( x.in2[, `:=` ( x = NULL, y = NULL)])
+  x.in <- cbind( x.in1[, .( x, y)], x.in2)
+  
+  # rasterize new x file
+  x.r <- rasterFromXYZ( x.in, crs = p4s)
+  x.n <- paste0( 'X', names( x.in)[!(names( x.in) %in% c( 'x', 'y'))])
+  x.n <- gsub( '^XX', 'X', x.n)
+  names( x.r) <- x.n
+  x.proj <-  project_and_stack( dat.s[[1]], x.r, mask.use = mask.use)
+  names( x.proj)[2:dim( x.proj)[3]] <- x.n
+  
+  # pick out the appropriate model
+  model.use <- model.dataset[ model.name, model.m][[1]]
+  
+  # predict the base scenario (zero hyads/idwe)
+  dat.use0<- copy( dat.s)
+  dat.use0[[name.dat]] <- 0
+  dat.coords <- coordinates( dat.s)
+  dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
+  
+  # xboost requires special treatment
+  if( xboost){
+    dat_raw0.dt.trim <- dat_raw0.dt[, model.use$feature_names, with = F]
+    xhold1c <- xgb.DMatrix( as.matrix( dat_raw0.dt.trim))
+    dat.pred0 <- predict( model.use, newdata = xhold1c)
+  } else
+    dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  
+  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
+  
+  # do the predictions
+  pred_pm.r <- brick( pbmcapply::pbmclapply( x.n, function( n){ 
+    gc()
+    # assign unit to prediction dataset
+    dat.use <- copy( dat.s)
+    dat.use[[name.dat]] <- x.proj[[n]]
+    
+    # if zero impacts, return raster with only zeros
+    if( sum( values(x.proj[[n]]), na.rm = T) == 0)
+      return( x.proj[[n]])
+    
+    # set up the dataset
+    dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
+    
+    # do the predictions
+    if( xboost){
+      dat_raw.dt.trim <- dat_raw.dt[, model.use$feature_names, with = F]
+      xhold.pred <- xgb.DMatrix( as.matrix( dat_raw.dt.trim))
+      dat.pred <- predict( model.use, newdata = xhold.pred)
+    } else
+      dat.pred <- predict( model.use, newdata = dat_raw.dt)
+    
+    # rasterize
+    dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
+    
+    #take difference from base
+    if( take.diff){
+      dats.r2 <- dats.r - dats0.r
+    } else 
+      dats.r2 <- dats.r
+    
+    names( dats.r2) <- n
+    return( dats.r2)
+  }))
+  
+  # multiply by population
+  pred_popwgt.r <- pred_pm.r * dat.s[['pop']]
+  names( pred_popwgt.r) <- names( pred_pm.r)
+  
+  #calculate raw average for the entire domain
+  pred_pm.us <- colMeans( data.table( values( pred_pm.r)), na.rm = T)
+  pred_pm.us.dt <- data.table( uID = names( pred_pm.us),
+                               mean_pm = pred_pm.us,
+                               state_abbr = 'US',
+                               ID = 100)
+  
+  #calculate pop-weightedverage for the entire domain
+  pred_pm.pw.us <- colSums( na.omit( data.table( values( pred_popwgt.r)), na.rm = T))
+  pred_pm.pw.us.dt <- data.table( uID = names( pred_pm.pw.us),
+                                  mean_popwgt = pred_pm.pw.us,
+                                  state_abbr = 'US',
+                                  ID = 100)
+  
+  # calculate raw average by state
+  pred_pm.r$ID <- mask.r
+  pred_pm.dt <- data.table( values( pred_pm.r))
+  pred_pm.dt.m <- na.omit( melt( pred_pm.dt, id.vars = 'ID', variable.name = 'uID'))
+  pred_pm.dt.s <- pred_pm.dt.m[, .( mean_pm = mean( value)), by = .( ID, uID)]
+  pred_pm.dt.s <- merge( pred_pm.dt.s, mask.a, by = 'ID')
+  
+  # calculate population-weighted by state
+  pred_popwgt.r$ID <- mask.r
+  pred_popwgt.dt <- data.table( values( pred_popwgt.r))
+  pred_popwgt.dt.m <- na.omit( melt( pred_popwgt.dt, id.vars = 'ID', variable.name = 'uID'))
+  pred_popwgt.dt.s <- pred_popwgt.dt.m[, .( mean_popwgt = sum( value)), by = .( ID, uID)]
+  pred_popwgt.dt.s <- merge( pred_popwgt.dt.s, mask.a, by = 'ID')
+  
+  # bind with united states pops
+  pred_pm <- rbind( pred_pm.dt.s, pred_pm.us.dt)
+  pred_pm.pw <- rbind( pred_popwgt.dt.s, pred_pm.pw.us.dt)
+  
+  # now just divide by each state's total population
+  setnames( state_pops, popyr.name, 'pop_amnt')
+  state_pops_lite <- state_pops[, .( state_abbr, pop_amnt)]
+  pop.tot <- data.table( state_abbr = 'US', pop_amnt = sum( state_pops$pop_amnt))
+  state_pops_lite <- rbind( state_pops_lite, pop.tot)
+  pred_popwgt.out <- merge( pred_pm.pw, state_pops_lite, by = 'state_abbr')
+  
+  # divide by total population
+  pred_popwgt.out[, `:=` ( popwgt = mean_popwgt / pop_amnt,
+                           month = name.Date)]
+  
+  # merge pop-weighted and raw dataset
+  out <- merge( pred_popwgt.out, pred_pm, by = c( 'state_abbr', 'ID', 'uID'))
+  
+  return( list( popwgt_states = out, pred_pm.r = pred_pm.r, zero_out.r = dats0.r))
+  
 }
