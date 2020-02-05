@@ -1,6 +1,6 @@
 library( data.table)
 library( raster)
-library( spBayes)
+# library( spBayes)
 library( disperseR)
 library( ggplot2)
 library( viridis)
