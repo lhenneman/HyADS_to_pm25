@@ -85,6 +85,7 @@ hyads_month_lm.dt <- rbindlist( lapply( files.hyads.lm, fread, drop = c( 'V1', '
 units_month.dt <- rbind( idwe_month_gam.dt, hyads_month_gam.dt, idwe_month_lm.dt, hyads_month_lm.dt)
 units_month.dt.c <- na.omit( dcast( units_month.dt, state_abbr + uID + month + model ~ name, value.var = 'popwgt'))
 
+
 ## =================================================== ##
 #   Do the evaluations
 ## =================================================== ##
@@ -102,6 +103,15 @@ units_month.state.m <- units_month.state.m[ state_abbr %in% states.use]
 units_month.state.m[, `:=` ( year.n = year( month),
                              month.n =  factor( month.name[ month( month)], levels = month.name),
                              state.factor = factor( state_abbr, levels = states.use))]
+
+# save version for sharing
+units_month.dt.c.share <- units_month.dt.c[ state_abbr %in% states.use & 
+                                              model == 'Model 5', 
+                                            .( state_abbr, uID, month, HyADS, IDWE)]
+setnames( units_month.dt.c.share, c( 'HyADS', 'IDWE'), c( 'hyads.pw', 'idwe.pw'))
+units_month.dt.c.share[, uID := gsub( '^X', '', uID)]
+fwrite( units_month.dt.c.share,
+        '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/CopyEdits_JESEE/Repo/dataset_monthly.csv')
 
 # negative correlations in CO in 3 months come from negative 
 # results predictions in GAM, which lead to inverted correlation

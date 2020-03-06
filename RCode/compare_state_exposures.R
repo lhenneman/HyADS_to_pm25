@@ -515,6 +515,14 @@ ranks_adj_all[, state.factor := factor(`state`, levels =  states.use)]
 # not looking at the ones with zero
 ranks_adj_all <- ranks_adj_all[ uID != 'tot.sum'][!is.na( adj.name)]
 
+# create dataset for sharing
+ranks_adj_all_share.m <- ranks_adj_all[, .( uID, year, state, pop, 
+                                          adj.name, adj_popwgt, idwe.pw, hyads.pw)]
+ranks_adj_all_share.c <- dcast( ranks_adj_all_share.m, 
+                                uID + year + state + pop + idwe.pw + hyads.pw ~ adj.name,
+                                value.var = 'adj_popwgt')
+fwrite( ranks_adj_all_share.c,
+        '~/Dropbox/Harvard/Manuscripts/eval_local_exposure/CopyEdits_JESEE/Repo/dataset.csv')
 # rank hyads and idwe
 # ranks_adj_all[, `:=` ( hyads.rank  = frankv( `hyads`, order = -1),
 #                        idwe.rank   = frankv( `idwe`, order = -1),
