@@ -534,31 +534,31 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                         eval.fn( y.rscale.Z, x.rscale.Z, 'adj.Z.only'))
   
   # calculate correlations along quantiles of idwe
-  evals.q <- data.table()
-  evals.qq <- data.table()
-  if( ho.frac == 0){
-    vals.idwe <- unlist( data.table( values( dat.stack))[, ..name.idwe])
-    vals.eval <- data.table( values( Y.ho.hat.raster))
-    for ( s in seq( 0.01, 1, .01)){
-      q <- quantile( vals.idwe, s, na.rm = T)
-      vals.use <- vals.eval[vals.idwe < q,]
-      evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
-      evals.q <- rbind( evals.q, evals)
-    }
-    for ( s in seq( 0.05, 1, .05)){
-      q <- quantile( vals.idwe, s, na.rm = T)
-      qq <- quantile( vals.idwe, s - .05, na.rm = T)
-      vals.use <- vals.eval[vals.idwe < q & vals.idwe > qq,]
-      evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
-      evals.qq <- rbind( evals.qq, evals)
-    }
-  }
+  # evals.q <- data.table()
+  # evals.qq <- data.table()
+  # if( ho.frac == 0){
+  #   vals.idwe <- unlist( data.table( values( dat.stack))[, ..name.idwe])
+  #   vals.eval <- data.table( values( Y.ho.hat.raster))
+  #   for ( s in seq( 0.01, 1, .01)){
+  #     q <- quantile( vals.idwe, s, na.rm = T)
+  #     vals.use <- vals.eval[vals.idwe < q,]
+  #     evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
+  #     evals.q <- rbind( evals.q, evals)
+  #   }
+  #   for ( s in seq( 0.05, 1, .05)){
+  #     q <- quantile( vals.idwe, s, na.rm = T)
+  #     qq <- quantile( vals.idwe, s - .05, na.rm = T)
+  #     vals.use <- vals.eval[vals.idwe < q & vals.idwe > qq,]
+  #     evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
+  #     evals.qq <- rbind( evals.qq, evals)
+  #   }
+  # }
   
   # listify the models
   if( return.mods)
     out <- list( metrics = metrics.out, 
-                 evals.q = evals.q,
-                 evals.qq = evals.qq,
+                 # evals.q = evals.q,
+                 # evals.qq = evals.qq,
                  model.cv = lm.cv,
                  model.ncv = lm.ncv,
                  model.gam = gam.cv,
@@ -569,8 +569,8 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  Y.ho.terms.gam.raster = Y.ho.terms.gam.raster)
   if( !return.mods)
     out <- list( metrics = metrics.out, 
-                 evals.q = evals.q,
-                 evals.qq = evals.qq,
+                 # evals.q = evals.q,
+                 # evals.qq = evals.qq,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
