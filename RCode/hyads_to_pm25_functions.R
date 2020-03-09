@@ -1347,7 +1347,7 @@ hyads_to_pm25_unit <- function(
   hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'uID', 'hyads'), as.data.table = T)
   hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
   hyads.use.p <- rasterFromXYZ( hyads.dt.c, crs = p4s)
-  hyads.use.p[is.na( hyads.r)] <- 0
+  hyads.use.p[is.na( hyads.use.p)] <- 0
   hyads.proj <- project_and_stack( dat.s[[1]], hyads.use.p, mask.use = mask.use)
   hyads.proj <- dropLayer( hyads.proj, 1)
   hyads.n <- names( hyads.proj)
