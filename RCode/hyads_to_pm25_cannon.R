@@ -32,7 +32,7 @@ mets2005.m <- usa.functioner( 2005, list.met, dataset = 'NARR', avg.period = 'mo
 mets2006.m <- usa.functioner( 2006, list.met, dataset = 'NARR', avg.period = 'month', return.usa.sub = F)
 
 # combine monthly rasters into single list
-mets.m.all <- append( append( mets2005.m, mets2006.m))
+mets.m.all <- append( mets2005.m, mets2006.m)
 
 #======================================================================#
 ## Load ddm as month

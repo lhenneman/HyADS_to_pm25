@@ -1285,3 +1285,124 @@ hyads_to_pm25 <- function(
   return( list( popwgt_states = out, pred_pm.r = pred_pm.r, zero_out.r = dats0.r))
   
 }
+
+#======================================================================#
+## function for converting individual unit concentrations to ugm3
+# inputs - filename of grid w/ unit or summed impacts
+#        - model
+#        - covariate raster
+#        - 'x' name in the raster from model
+# 
+# output - data table of ugm3 impacts for all input units
+#======================================================================#
+hyads_to_pm25_unit <- function( 
+  year.m = 2006,
+  month.n = NULL,
+  fstart,
+  fstart_out,
+  model.dataset = preds.mon.idwe06w05,
+  model.name = 'model.cv', #'model.gam'
+  name.x = 'hyads',
+  mask.use = mask.usa
+){
+  message( paste( 'Converting', month.name[month.n], year.m))
+  
+  # define date/month names
+  month.N <- formatC( month.n, width = 2, flag = '0')
+  name.m <- paste0( 'X', year.m, '.', month.N, '.01')
+  model.m <- paste0( 'X2005.', month.N, '.01')
+  name.Date <- as.Date( name.m, format = 'X%Y.%m.%d')
+  
+  # define file nanmes
+  fname <- paste0( fstart, year.m, '_', month.N, '.fst')
+  fname_out <- paste0( fstart_out, year.m, '_', month.N, '.fst')
+  name.dat <- name.x
+  
+  #define the met layer names, do the actual downloading
+  Sys.setenv(TZ='UTC')
+  layer.names <- c( "air.2m.mon.mean.nc",
+                    "apcp.mon.mean.nc",
+                    "rhum.2m.mon.mean.nc",
+                    "vwnd.10m.mon.mean.nc",
+                    "uwnd.10m.mon.mean.nc")
+  names( layer.names) <- c( "temp", "apcp", "rhum", "vwnd", "uwnd")
+  
+  # do the data downloading
+  # set destination parameter to where you want the data downloaded,
+  # for example, destination = '~/Desktop'
+  list.met <- lapply( layer.names,
+                      downloader.fn, 
+                      destination = '/n/zigler_lab/lhenneman/HyADS_to_pm25/inputdata/met',
+                      dataset = 'NARR')
+  mets.m <- suppressWarnings( 
+    usa.functioner( year.m, list.met, dataset = 'NARR', 
+                    avg.period = 'month', return.usa.sub = F)
+  )
+  
+  # create prediction dataset
+  mets.use.p <- mets.m[[name.m]]
+  dat.s <- project_and_stack( mets.use.p, mask.use = mask.use)
+  
+  #read in, project hyads
+  hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'uID', 'hyads'), as.data.table = T)
+  hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
+  hyads.use.p <- rasterFromXYZ( hyads.dt.c, crs = p4s)
+  hyads.use.p[is.na( hyads.r)] <- 0
+  hyads.proj <- project_and_stack( dat.s[[1]], hyads.use.p, mask.use = mask.use)
+  hyads.proj <- dropLayer( hyads.proj, 1)
+  hyads.n <- names( hyads.proj)
+  
+  # pick out the appropriate model
+  model.use <- model.dataset[ model.name, model.m][[1]]
+  
+  # create dataset to predict the base scenario (zero hyads)
+  dat.use0<- copy( dat.s)
+  r <- dat.use0[[1]]
+  names( r)<- name.dat
+  dat.use0 <- addLayer( dat.use0, r)
+  dat.use0[[name.dat]] <- 0
+  
+  # predict the base scenario
+  dat.coords <- coordinates( dat.s)
+  dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
+  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  
+  # create raster from base scenario
+  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
+  
+  # do the predictions
+  pred_pm.r <- brick( pbmcapply::pbmclapply( hyads.n, function( n){ 
+    gc()
+    # assign unit to prediction dataset
+    dat.use <- copy( dat.s)
+    r <- hyads.proj[[n]]
+    names( r)<- name.dat
+    dat.use <- addLayer( dat.use, r)
+    
+    # if zero impacts, return raster with only zeros
+    if( sum( values(hyads.proj[[n]]), na.rm = T) == 0)
+      return( hyads.proj[[n]])
+    
+    # set up the dataset
+    dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
+    
+    dat.pred <- predict( model.use, newdata = dat_raw.dt)
+    
+    # rasterize
+    dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
+    
+    #take difference from base
+    dats.r2 <- dats.r - dats0.r
+    
+    names( dats.r2) <- n
+    return( dats.r2)
+  }))
+  
+  # write out the data.table as fst
+  pred_pm.dt <- data.table( cbind( dat.coords, values( pred_pm.r)))
+  write_fst( pred_pm.dt, fname_out)
+  
+  note <- paste( 'Unit conversions saved to', fname_out)
+  message( note)
+  return( note)
+}
