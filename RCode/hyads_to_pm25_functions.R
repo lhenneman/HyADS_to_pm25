@@ -1341,6 +1341,7 @@ hyads_to_pm25_unit <- function(
   
   # create prediction dataset
   mets.use.p <- mets.m[[name.m]]
+  mets.use.p <- projectRaster( mets.use.p, crs = p4s)
   dat.s <- project_and_stack( mets.use.p, mask.use = mask.use)
   
   #read in, project hyads
