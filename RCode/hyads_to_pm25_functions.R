@@ -1401,6 +1401,7 @@ hyads_to_pm25_unit <- function(
   
   # write out the data.table as fst
   pred_pm.dt <- data.table( cbind( dat.coords, values( pred_pm.r)))
+  print( summary( pred_pm.dt[, 1:5]))
   write_fst( pred_pm.dt, fname_out)
   
   note <- paste( 'Unit conversions saved to', fname_out)

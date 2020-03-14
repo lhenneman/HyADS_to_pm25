@@ -26,7 +26,7 @@ mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names
 #======================================================================#
 ## Prepare population data for functions below
 #======================================================================#
-mapply( hyads_to_pm25_unit, rep( 2000:2009, each = 12), 1:12,
+mapply( hyads_to_pm25_unit, rep( 2010:2015, each = 12), 1:12,
         MoreArgs = list(
           fstart = file.path( hyads.dir, 'grids_exposures_byunit_'),
           fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_byunit_'),
