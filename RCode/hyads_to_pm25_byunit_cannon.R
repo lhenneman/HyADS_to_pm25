@@ -24,9 +24,10 @@ mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names
 
 
 #======================================================================#
-## Prepare population data for functions below
+## Monthly conversions
 #======================================================================#
-mapply( hyads_to_pm25_unit, rep( 2010:2015, each = 12), 1:12,
+#mapply( hyads_to_pm25_unit, rep( 2013:2015, each = 12), 1:12,
+mapply( hyads_to_pm25_unit, rep( 2015, each = 7), 6:12,
         MoreArgs = list(
           fstart = file.path( hyads.dir, 'grids_exposures_byunit_'),
           fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_byunit_'),
@@ -35,6 +36,20 @@ mapply( hyads_to_pm25_unit, rep( 2010:2015, each = 12), 1:12,
           name.x = 'hyads',
           mask.use = mask.usa
         )
+)
+
+#======================================================================#
+## Annual conversions
+#======================================================================#
+#mapply( hyads_to_pm25_unit, rep( 2013:2015, each = 12), 1:12,
+lapply( 2000:2015,
+        hyads_to_pm25_unit,
+        fstart = file.path( hyads.dir, 'grids_exposures_byunit_'),
+        fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_byunit_'),
+        model.dataset = preds.ann.hyads06w05,
+        model.name = 'model.cv', #'model.gam'
+        name.x = 'hyads',
+        mask.use = mask.usa
 )
 
 

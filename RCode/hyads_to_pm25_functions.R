@@ -1307,17 +1307,6 @@ hyads_to_pm25_unit <- function(
 ){
   message( paste( 'Converting', month.name[month.n], year.m))
   
-  # define date/month names
-  month.N <- formatC( month.n, width = 2, flag = '0')
-  name.m <- paste0( 'X', year.m, '.', month.N, '.01')
-  model.m <- paste0( 'X2005.', month.N, '.01')
-  name.Date <- as.Date( name.m, format = 'X%Y.%m.%d')
-  
-  # define file nanmes
-  fname <- paste0( fstart, year.m, '_', month.N, '.fst')
-  fname_out <- paste0( fstart_out, year.m, '_', month.N, '.fst')
-  name.dat <- name.x
-  
   #define the met layer names, do the actual downloading
   Sys.setenv(TZ='UTC')
   layer.names <- c( "air.2m.mon.mean.nc",
@@ -1334,13 +1323,44 @@ hyads_to_pm25_unit <- function(
                       downloader.fn, 
                       destination = '/n/zigler_lab/lhenneman/HyADS_to_pm25/inputdata/met',
                       dataset = 'NARR')
-  mets.m <- suppressWarnings( 
-    usa.functioner( year.m, list.met, dataset = 'NARR', 
-                    avg.period = 'month', return.usa.sub = F)
-  )
+  
+  # annual or month-specific actions
+  if( is.null( month.n)){
+    # define file nanmes
+    fname <- paste0( fstart, year.m, '.fst')
+    fname_out <- paste0( fstart_out, year.m, '.fst')
+    
+    # download met data
+    mets.use.p <- suppressWarnings( 
+      usa.functioner( year.m, list.met, dataset = 'NARR', 
+                      avg.period = 'year', return.usa.sub = F)
+    )
+    
+    # pick out the appropriate model
+    model.use <- model.dataset[[ model.name]]
+  } else {
+    # define date/month names
+    month.N <- formatC( month.n, width = 2, flag = '0')
+    name.m <- paste0( 'X', year.m, '.', month.N, '.01')
+    model.m <- paste0( 'X2005.', month.N, '.01')
+    name.Date <- as.Date( name.m, format = 'X%Y.%m.%d')
+    
+    # define file nanmes
+    fname <- paste0( fstart, year.m, '_', month.N, '.fst')
+    fname_out <- paste0( fstart_out, year.m, '_', month.N, '.fst')
+    
+    # download met data
+    mets.m <- suppressWarnings( 
+      usa.functioner( year.m, list.met, dataset = 'NARR', 
+                      avg.period = 'month', return.usa.sub = F)
+    )
+    mets.use.p <- mets.m[[name.m]]
+    
+    # pick out the appropriate model
+    model.use <- model.dataset[ model.name, model.m][[1]]
+  }
   
   # create prediction dataset
-  mets.use.p <- mets.m[[name.m]]
   mets.use.p <- projectRaster( mets.use.p, crs = p4s)
   dat.s <- project_and_stack( mets.use.p, mask.use = mask.use)
   
@@ -1353,15 +1373,12 @@ hyads_to_pm25_unit <- function(
   hyads.proj <- dropLayer( hyads.proj, 1)
   hyads.n <- names( hyads.proj)
   
-  # pick out the appropriate model
-  model.use <- model.dataset[ model.name, model.m][[1]]
-  
   # create dataset to predict the base scenario (zero hyads)
   dat.use0<- copy( dat.s)
   r <- dat.use0[[1]]
-  names( r)<- name.dat
+  names( r)<- name.x
   dat.use0 <- addLayer( dat.use0, r)
-  dat.use0[[name.dat]] <- 0
+  dat.use0[[name.x]] <- 0
   
   # predict the base scenario
   dat.coords <- coordinates( dat.s)
@@ -1377,7 +1394,7 @@ hyads_to_pm25_unit <- function(
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
     r <- hyads.proj[[n]]
-    names( r)<- name.dat
+    names( r)<- name.x
     dat.use <- addLayer( dat.use, r)
     
     # if zero impacts, return raster with only zeros
