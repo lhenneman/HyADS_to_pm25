@@ -1391,7 +1391,9 @@ hyads_to_pm25_unit <- function(
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
   
   # do the predictions
-  pred_pm.r <- brick( pbmcapply::pbmclapply( hyads.n, function( n){ 
+  pred_pm.r <- brick( pbmcapply::pbmclapply( hyads.n[850:900], function( n){ 
+    n <- gsub( '#', '.', n)
+    print( n)
     gc()
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
