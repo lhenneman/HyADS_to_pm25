@@ -217,7 +217,7 @@ usa.functioner <- function( year.in = 2005,
               padding = 1)
       })
       
-      mets.out <- brick( mets.out)
+      mets.out <- brick( mets.out.l)
       
     } else{ 
       names.months <- names( mets[[1]])
