@@ -1303,7 +1303,8 @@ hyads_to_pm25_unit <- function(
   model.dataset = preds.mon.idwe06w05,
   model.name = 'model.cv', #'model.gam'
   name.x = 'hyads',
-  mask.use = mask.usa
+  mask.use = mask.usa,
+  total = F
 ){
   message( paste( 'Converting', month.name[month.n], year.m))
   
@@ -1365,9 +1366,17 @@ hyads_to_pm25_unit <- function(
   dat.s <- project_and_stack( mets.use.p, mask.use = mask.use)
   
   #read in, project hyads
-  hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'uID', 'hyads'), as.data.table = T)
-  hyads.dt <- hyads.dt[!is.na( x) & !is.na( y)]
-  hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
+  if( total){
+    hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'hyads'), as.data.table = T)
+    hyads.dt.c <- hyads.dt[!is.na( x) & !is.na( y)]
+    hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
+    
+  } else {
+    hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'uID', 'hyads'), as.data.table = T)
+    hyads.dt <- hyads.dt[!is.na( x) & !is.na( y)]
+    hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
+  }
+  
   hyads.use.p <- rasterFromXYZ( hyads.dt.c, crs = p4s)
   hyads.use.p[is.na( hyads.use.p)] <- 0
   hyads.proj <- project_and_stack( dat.s[[1]], hyads.use.p, mask.use = mask.use)
@@ -1391,10 +1400,10 @@ hyads_to_pm25_unit <- function(
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
   
   # do the predictions
-  pred_pm.r <- brick( pbmcapply::pbmclapply( hyads.n, function( n){ 
+  pred_pm.r <- pbmcapply::pbmclapply( hyads.n, function( n){ 
     gc()
     n <- gsub( '#', '.', n)
-
+    
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
     r <- hyads.proj[[n]]
@@ -1418,11 +1427,16 @@ hyads_to_pm25_unit <- function(
     
     names( dats.r2) <- n
     return( dats.r2)
-  }))
+  })
+  
+  if( total){
+    pred_pm.r <- pred_pm.r$value[[1]]
+  } else
+    pred_pm.r <- brick( pred_pm.r)
   
   # write out the data.table as fst
   pred_pm.dt <- data.table( cbind( dat.coords, values( pred_pm.r)))
-  print( summary( pred_pm.dt[, 6:10]))
+  # print( summary( pred_pm.dt[, 6:10]))
   write_fst( pred_pm.dt, fname_out)
   
   note <- paste( 'Unit conversions saved to', fname_out)

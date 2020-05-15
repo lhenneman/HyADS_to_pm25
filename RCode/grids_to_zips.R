@@ -41,12 +41,22 @@ zips <- zip_sf_reader()[, 'ZIP']
 ## ==================================================== ##
 grids_to_zips <- function( file.in){
   print( file.in)
-  # read in the file, convert to raster
+  # read in the file
   in.g <- read.fst( file.in, as.data.table = T)
   in.g[ is.na( in.g)] <- 0
-  in.r <- rasterFromXYZ( in.g)
+  
+  # remove units with all zeros
+  in.unames <- names( in.g)[ !( names( in.g) %in% c( 'x', 'y'))]
+  hyads.sums <- suppressWarnings( melt( in.g[, lapply( .SD, sum), .SDcols = ( in.unames)]))
+  hyads.sums.use <- as.character( hyads.sums$variable)[hyads.sums$value > 0]
+  
+  # trim the dataset to include only units that are not 0
+  in.g.trim <- in.g[, c( 'x', 'y', hyads.sums.use), with = F]
+  
+  # convert to raster
+  in.r <- rasterFromXYZ( in.g.trim)
   crs( in.r) <- p4s
-  names( in.r) <- names(in.g)[!( names(in.g) %in% c( 'x', 'y'))]
+  names( in.r) <- names(in.g.trim)[!( names( in.g.trim) %in% c( 'x', 'y'))]
   
   # convert to sf object
   ncin_spatpoly <- rasterToPolygons( in.r)
@@ -86,7 +96,7 @@ grids_to_zips <- function( file.in){
   
   # define output file, write
   file.out <- gsub( 'grids_', 'zips_', file.in)
-  write.csv( zips.pm.c, file = file.out)
+  write.fst( zips.pm.c, path = file.out)
   
   return( file.out)
 }
@@ -95,9 +105,28 @@ grids_to_zips <- function( file.in){
 ##          Run the function
 ## ==================================================== ##
 grid.files <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/',
-                          pattern = 'grids_',
+                          pattern = 'grids_.*_\\d{2}\\.fst',
                           full.names = TRUE)
-grids_pm.list <- lapply( grid.files, grids_to_zips)
+grids_pm.list <- lapply( grid.files[181:192], grids_to_zips)
+
+grid.files.yr <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/',
+                             pattern = 'grids_.*\\d{4}\\.fst',
+                             full.names = TRUE)
+grids_pm.list <- lapply( grid.files.yr, grids_to_zips)
+
+## ==================================================== ##
+##          Run the function for raw hyads
+## ==================================================== ##
+grid.files2005 <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp/',
+                              pattern = 'grids_.*total_2005.fst',
+                              full.names = TRUE)
+grids_pm.list <- lapply( grid.files2005, grids_to_zips)
+
+grid.files2005 <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/',
+                              pattern = 'grids_.*total_2005.fst',
+                              full.names = TRUE)
+
+grids_pm.list <- lapply( grid.files2005, grids_to_zips)
 
 
 ## ==================================================== ##
