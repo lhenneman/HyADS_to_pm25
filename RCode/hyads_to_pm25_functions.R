@@ -1369,8 +1369,6 @@ hyads_to_pm25_unit <- function(
   if( total){
     hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'hyads'), as.data.table = T)
     hyads.dt.c <- hyads.dt[!is.na( x) & !is.na( y)]
-    hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
-    
   } else {
     hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'uID', 'hyads'), as.data.table = T)
     hyads.dt <- hyads.dt[!is.na( x) & !is.na( y)]
