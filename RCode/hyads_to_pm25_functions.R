@@ -1429,7 +1429,7 @@ hyads_to_pm25_unit <- function(
   })
   
   if( total){
-    pred_pm.r <- pred_pm.r$value[[1]]
+    pred_pm.r <- pred_pm.r[[1]]
   } else
     pred_pm.r <- brick( pred_pm.r)
   
