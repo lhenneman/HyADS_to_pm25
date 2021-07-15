@@ -353,7 +353,7 @@ us_states <- st_transform( USAboundaries::us_states(), p4s)
 us_states.p <- st_interpolate_aw( grid_popwgt.sf, us_states, extensive = T)
 
 # merge back to state information
-us_states.pop <- cbind( us_states.p, us_states[us_states.p$Group.1,])
+us_states.pop <- cbind( us_states.p, us_states[!(us_states$state_name %in% c( 'Hawaii', 'Alaska', 'Puerto Rico')),])
 us_states.pop$geometry.1 <- NULL
 us_states.pop.dt <- data.table( us_states.pop)
 

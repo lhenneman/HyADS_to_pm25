@@ -1304,6 +1304,7 @@ hyads_to_pm25_unit <- function(
   model.name = 'model.cv', #'model.gam'
   name.x = 'hyads',
   mask.use = mask.usa,
+  met.dest = '/projects/HAQ_LAB/lhennem/data/disperseR/HyADS_to_pm25/met',
   total = F
 ){
   message( paste( 'Converting', month.name[month.n], year.m))
@@ -1322,7 +1323,7 @@ hyads_to_pm25_unit <- function(
   # for example, destination = '~/Desktop'
   list.met <- lapply( layer.names,
                       downloader.fn, 
-                      destination = '/n/zigler_lab/lhenneman/HyADS_to_pm25/inputdata/met',
+                      destination = met.dest,
                       dataset = 'NARR')
   
   # annual or month-specific actions

@@ -106,7 +106,7 @@ county_allyears <- rbindlist( lapply( 1:20,
                                       }, count_files_total, 1999:2018))
 
 write.fst( county_allyears, 
-           path = "/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/counties_pm25_total_1999-2018.fst")
+           path = "/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/counties_pm25_total_1999-2018_20200521.fst")
 
 ## ==================================================== ##
 ##          Run the function for raw hyads
@@ -121,4 +121,14 @@ grid.files2005 <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/ex
                               full.names = TRUE)
 
 grids_pm.list <- lapply( grid.files2005, grids_to_zips)
+
+
+hyads1999 <- read_fst( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/counties_pm25_byunit_1999.fst', as.data.table = T)
+hyads1999 <- melt( hyads1999, id.vars = 'geoid')
+hyads2017 <- read_fst( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/counties_pm25_byunit_2017.fst', as.data.table = T)
+hyads2017 <- melt( hyads2017, id.vars = 'geoid')
+hyads2018 <- read_fst( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/counties_pm25_byunit_2018.fst', as.data.table = T)
+hyads2018 <- melt( hyads2018, id.vars = 'geoid')
+
+in.unit <- rbindlist( lapply( unitfiles, read_fst))
 

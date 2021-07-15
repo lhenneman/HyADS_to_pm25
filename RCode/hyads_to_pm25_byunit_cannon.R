@@ -31,14 +31,30 @@ mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names
 ## Monthly conversions
 #======================================================================#
 #mapply( hyads_to_pm25_unit, rep( 2013:2015, each = 12), 1:12,
-mapply( hyads_to_pm25_unit, rep( 2015, each = 12), 1:12,
+mapply( hyads_to_pm25_unit, rep( 2017:2018, each = 2), c( 2,6),
         MoreArgs = list(
-          fstart = file.path( hyads.dir, 'grids_exposures_byunit_'),
-          fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_byunit_'),
-          model.dataset = preds.mon.hyads06w05,
-          model.name = 'model.cv', #'model.gam'
-          name.x = 'hyads',
-          mask.use = mask.usa
+                fstart = file.path( hyads.dir, 'grids_exposures_byunit_'),
+                fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_byunit_'),
+                model.dataset = preds.mon.hyads06w05,
+                model.name = 'model.cv', #'model.gam'
+                name.x = 'hyads',
+                mask.use = mask.usa
+        )
+)
+
+#======================================================================#
+## Monthly conversions -- total
+#======================================================================#
+#mapply( hyads_to_pm25_unit, rep( 2013:2015, each = 12), 1:12,
+mapply( hyads_to_pm25_unit, rep( 1999:2018, each = 12), 1:12,
+        MoreArgs = list(
+                fstart = file.path( hyads.dir, 'grids_exposures_total_'),
+                fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_total_'),
+                model.dataset = preds.mon.hyads06w05,
+                model.name = 'model.cv', #'model.gam'
+                name.x = 'hyads',
+                mask.use = mask.usa,
+                total = T
         )
 )
 
@@ -46,7 +62,7 @@ mapply( hyads_to_pm25_unit, rep( 2015, each = 12), 1:12,
 ## Annual conversions
 #======================================================================#
 #mapply( hyads_to_pm25_unit, rep( 2013:2015, each = 12), 1:12,
-lapply( 2003:2015,
+lapply( 2017:2018,
         hyads_to_pm25_unit,
         fstart = file.path( hyads.dir, 'grids_exposures_byunit_'),
         fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_byunit_'),
@@ -60,7 +76,7 @@ lapply( 2003:2015,
 ## Annual conversions -- total
 #======================================================================#
 #mapply( hyads_to_pm25_unit, rep( 2013:2015, each = 12), 1:12,
-lapply( c( 1999:2004, 2006:2018),
+lapply( c( 2017:2018),
         hyads_to_pm25_unit,
         fstart = file.path( hyads.dir, 'grids_exposures_total_'),
         fstart_out = file.path( hyadsPM25.dir, 'grids_pm25_total_'),

@@ -107,12 +107,12 @@ grids_to_zips <- function( file.in){
 grid.files <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/',
                           pattern = 'grids_.*_\\d{2}\\.fst',
                           full.names = TRUE)
-grids_pm.list <- lapply( grid.files[181:192], grids_to_zips)
+grids_pm.list <- lapply( grid.files[c( 1:12, 205:240)], grids_to_zips)
 
 grid.files.yr <- list.files( '/n/zigler_lab/lhenneman/diseperseR/main/output/exp25/',
                              pattern = 'grids_.*\\d{4}\\.fst',
                              full.names = TRUE)
-grids_pm.list <- lapply( grid.files.yr, grids_to_zips)
+grids_pm.list <- lapply( grid.files.yr[c( 1, 18:21, 38:40)], grids_to_zips)
 
 ## ==================================================== ##
 ##          Run the function for raw hyads
