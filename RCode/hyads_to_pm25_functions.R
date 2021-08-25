@@ -1340,6 +1340,11 @@ hyads_to_pm25_unit <- function(
     
     # pick out the appropriate model
     model.use <- model.dataset[[ model.name]]
+    
+    # get the prediction crs
+    model.rast <- model.dataset$Y.ho.hat.raster
+    model.csr <- crs( model.rast)
+    
   } else {
     # define date/month names
     month.N <- formatC( month.n, width = 2, flag = '0')
@@ -1360,11 +1365,12 @@ hyads_to_pm25_unit <- function(
     
     # pick out the appropriate model
     model.use <- model.dataset[ model.name, model.m][[1]]
+    
+    # get the prediction crs
+    model.rast <- preds.mon.idwe06w05['Y.ho.hat.raster',][[model.m]]
+    model.csr <- crs( model.rast)
+    
   }
-  
-  # get the prediction crs
-  model.rast <- preds.mon.idwe06w05['Y.ho.hat.raster',][[model.m]]
-  model.csr <- crs( model.rast)
   
   # create prediction dataset
   mets.use.p <- projectRaster( mets.use.p, crs = model.csr)
@@ -1434,10 +1440,10 @@ hyads_to_pm25_unit <- function(
   
   if( total){
     pred_pm.r <- pred_pm.r[[1]][[1]] %>%
-      projectRaster( crs = p4s)
+      projectRaster( hyads.use.p)
   } else
     pred_pm.r <- brick( pred_pm.r) %>%
-    projectRaster( crs = p4s)
+    projectRaster( hyads.use.p)
   
   # collect coordinates and values
   coords.out <- coordinates( pred_pm.r)
