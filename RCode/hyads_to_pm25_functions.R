@@ -1362,9 +1362,13 @@ hyads_to_pm25_unit <- function(
     model.use <- model.dataset[ model.name, model.m][[1]]
   }
   
+  # get the prediction crs
+  model.rast <- preds.mon.idwe06w05['Y.ho.hat.raster',][[model.m]]
+  model.csr <- crs( model.rast)
+  
   # create prediction dataset
-  mets.use.p <- projectRaster( mets.use.p, crs = p4s)
-  dat.s <- project_and_stack( mets.use.p, mask.use = mask.use)
+  mets.use.p <- projectRaster( mets.use.p, crs = model.csr)
+  dat.s <- project_and_stack( model.rast, mets.use.p, mask.use = mask.use)
   
   #read in, project hyads
   if( total){
@@ -1396,7 +1400,7 @@ hyads_to_pm25_unit <- function(
   dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
   
   # create raster from base scenario
-  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = p4s)
+  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = model.csr)
   
   # do the predictions
   pred_pm.r <- pbmcapply::pbmclapply( hyads.n, function( n){ 
@@ -1429,12 +1433,18 @@ hyads_to_pm25_unit <- function(
   })
   
   if( total){
-    pred_pm.r <- pred_pm.r[[1]]
+    pred_pm.r <- pred_pm.r[[1]][[1]] %>%
+      projectRaster( crs = p4s)
   } else
-    pred_pm.r <- brick( pred_pm.r)
+    pred_pm.r <- brick( pred_pm.r) %>%
+    projectRaster( crs = p4s)
+  
+  # collect coordinates and values
+  coords.out <- coordinates( pred_pm.r)
+  vals.out <- values( pred_pm.r)
   
   # write out the data.table as fst
-  pred_pm.dt <- data.table( cbind( dat.coords, values( pred_pm.r)))
+  pred_pm.dt <- data.table( cbind( coords.out, vals.out))
   # print( summary( pred_pm.dt[, 6:10]))
   write_fst( pred_pm.dt, fname_out)
   
