@@ -449,14 +449,19 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   # check out linear regression models - define them
   form.cv <-  as.formula( paste( y.name, '~ (', paste( c( x.name, covars.names), 
                                                        collapse = '+'), ') ^2'))
+  form.cv2 <- as.formula( paste( y.name, '~ ', x.name, '* (', 
+                                 paste( c( x.name, covars.names), 
+                                        collapse = '+'), ') ^2'))
   ## k = 100 gives a minimum aic
-  form.cv.spl <- as.formula( paste( y.name, '~ (', paste( c( x.name, covars.names), 
-                                                          collapse = '+'), ') ^2', 
+  form.cv.spl <- as.formula( paste( y.name, '~ (', 
+                                    paste( c( x.name, covars.names), 
+                                           collapse = '+'), ') ^2', 
                                     '+s( x, y, k = 100)'))
-  form.ncv <- as.formula( paste( y.name, '~', x.name))
-  lm.cv <-  lm( form.cv,  data = dat.stack.tr)
-  lm.ncv <- lm( form.ncv, data = dat.stack.tr)
-  gam.cv <-  gam( form.cv.spl,  data = dat.stack.tr)
+   form.ncv <- as.formula( paste( y.name, '~', x.name))
+  lm.cv <-  gam( form.cv,  data = dat.stack.tr, family = 'poisson')
+  lm2.cv <-  gam( form.cv2,  data = dat.stack.tr, family = 'poisson')
+  lm.ncv <- gam( form.ncv, data = dat.stack.tr, family = 'poisson')
+  gam.cv <-  gam( form.cv.spl,  data = dat.stack.tr, family = 'poisson')
   
   # check out linear regression models - define them
   mean.y.over.x <- mean( unlist( dat.stack.tr[,..y.name]) / unlist( dat.stack.tr[,..x.name]), na.rm = T)
@@ -467,9 +472,10 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   
   # check out simpler models - get predicted Y.ho
   y.ho <- unlist( dat.stack.ho[,..y.name])
-  y.hat.lm.cv  <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T)
-  y.hat.lm.ncv <- predict( lm.ncv, newdata = dat.stack.ho, se.fit = T)
-  y.hat.gam.cv <- predict( gam.cv, newdata = dat.stack.ho, se.fit = T)
+  y.hat.lm.cv  <- predict( lm.cv,  type = 'response',  newdata = dat.stack.ho, se.fit = T)
+  y.hat.lm2.cv <- predict( lm2.cv, type = 'response', newdata = dat.stack.ho, se.fit = T)
+  y.hat.lm.ncv <- predict( lm.ncv,  type = 'response', newdata = dat.stack.ho, se.fit = T)
+  y.hat.gam.cv <- predict( gam.cv,  type = 'response', newdata = dat.stack.ho, se.fit = T)
   y.hat.mean <- unlist( dat.stack.ho[,..x.name] * mean.y.over.x)
   y.hat.Z <- unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x * sd.y + mean.y)
   x.rscale.Z <-    unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x)
@@ -477,9 +483,10 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   
   # calculate covariate contributions
   Y.ho.terms <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
+  Y.ho.terms.lm2.cv <- predict( lm2.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
   Y.ho.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
   Y.ho.terms.dt <- data.table( dat.coords.ho, Y.ho.terms$fit)
-  Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit)
+  Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit, Y.ho.terms.gam2.cv$fit)
   
   # CHANGE
   # Y.tr.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.tr, se.fit = T, type = 'terms')
@@ -491,15 +498,24 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   # summary( dat.stack.tr$idwe - dat.stack.ho$idwe)
   
   # set up evaluation data.table
-  Y.ho.hat <- data.table( dat.coords.ho, y.ho, y.hat.lm.cv = y.hat.lm.cv$fit, y.hat.gam.cv = y.hat.gam.cv$fit, 
-                          y.hat.lm.ncv = y.hat.lm.ncv$fit, y.hat.mean, y.hat.Z)
+  Y.ho.hat <- data.table( dat.coords.ho, y.ho, 
+                          y.hat.lm.cv = y.hat.lm.cv$fit, 
+                          y.hat.lm2.cv = y.hat.lm2.cv$fit, 
+                          y.hat.gam.cv = y.hat.gam.cv$fit, 
+                          y.hat.lm.ncv = y.hat.lm.ncv$fit, 
+                          y.hat.mean, 
+                          y.hat.Z)
   Y.ho.hat.bias <- data.table( dat.coords.ho, y.ho, 
                                y.hat.lm.cv = y.hat.lm.cv$fit - y.ho, 
+                               y.hat.lm2.cv = y.hat.lm2.cv$fit - y.ho, 
                                y.hat.lm.ncv = y.hat.lm.ncv$fit - y.ho, 
                                y.hat.gam.cv = y.hat.gam.cv$fit - y.ho, 
                                y.hat.mean = y.hat.mean - y.ho, 
                                y.hat.Z = y.hat.Z - y.ho)
-  Y.ho.hat.se <- data.table( dat.coords.ho, y.hat.lm.cv = y.hat.lm.cv$se.fit, y.hat.gam.cv = y.hat.gam.cv$se.fit,  
+  Y.ho.hat.se <- data.table( dat.coords.ho, 
+                             y.hat.lm.cv = y.hat.lm.cv$se.fit, 
+                             y.hat.lm2.cv = y.hat.lm2.cv$se.fit,  
+                             y.hat.gam.cv = y.hat.gam.cv$se.fit,  
                              y.hat.lm.ncv = y.hat.lm.ncv$se.fit)
   rscale.Z <- data.table( dat.coords.ho, x.rscale.Z, y.rscale.Z)
   
@@ -527,6 +543,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
     return( metrics)
   }
   metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.cv, y.ho, 'lm.cv'),
+                        eval.fn( Y.ho.hat$y.hat.lm2.cv, y.ho, 'lm2.cv'),
                         eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
                         eval.fn( Y.ho.hat$y.hat.gam.cv, y.ho, 'gam.cv'),
                         eval.fn( Y.ho.hat$y.hat.mean, y.ho, 'adj.mean'),
@@ -560,6 +577,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  # evals.q = evals.q,
                  # evals.qq = evals.qq,
                  model.cv = lm.cv,
+                 model.cv2 = lm2.cv,
                  model.ncv = lm.ncv,
                  model.gam = gam.cv,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
@@ -743,22 +761,22 @@ project_and_stack <- function( ..., mask.use = NULL){
 # output - data table of state, pop-wgted impact for all input units
 #======================================================================#
 state_exposurer <- function( 
-  month.n,
-  fstart,
-  year.m = 2006,
-  model.dataset = preds.mon.idwe06w05,
-  model.name = 'model.cv', #'model.gam'
-  name.x = 'idwe',
-  mask.use = mask.usa,
-  ddm.m = ddm.m.all,
-  mets.m = mets.m.all,
-  emiss.m = d_nonegu.r,
-  idwe.m. = idwe.m,
-  hyads.m = hyads.m.all,
-  grid_pop.r = grid_popwgt.r,
-  state_pops = copy( us_states.pop.dt),
-  take.diff = F,
-  xboost = F
+    month.n,
+    fstart,
+    year.m = 2006,
+    model.dataset = preds.mon.idwe06w05,
+    model.name = 'model.cv', #'model.gam'
+    name.x = 'idwe',
+    mask.use = mask.usa,
+    ddm.m = ddm.m.all,
+    mets.m = mets.m.all,
+    emiss.m = d_nonegu.r,
+    idwe.m. = idwe.m,
+    hyads.m = hyads.m.all,
+    grid_pop.r = grid_popwgt.r,
+    state_pops = copy( us_states.pop.dt),
+    take.diff = F,
+    xboost = F
 ){
   message( paste( 'Converting', month.name[month.n]))
   
@@ -928,17 +946,17 @@ state_exposurer <- function(
 ## same as above, but for a year
 #======================================================================#
 state_exposurer.year <- function( 
-  fname,
-  year.m = 2006,
-  model.use = preds.ann.hyads06w05$model.gam,
-  name.x = 'idwe',
-  mask.use = mask.usa,
-  dat.a = dats2006.a,
-  grid_pop.r = grid_popwgt.r,
-  state_pops = copy( us_states.pop.dt),
-  take.diff = F,
-  xboost = F,
-  raw = F
+    fname,
+    year.m = 2006,
+    model.use = preds.ann.hyads06w05$model.gam,
+    name.x = 'idwe',
+    mask.use = mask.usa,
+    dat.a = dats2006.a,
+    grid_pop.r = grid_popwgt.r,
+    state_pops = copy( us_states.pop.dt),
+    take.diff = F,
+    xboost = F,
+    raw = F
 ){
   message( paste( 'Converting', year.m))
   
@@ -1108,19 +1126,19 @@ evals.fn <- function( Yhat, Yact){
 # output - data table of state, pop-wgted impact for all input units
 #======================================================================#
 hyads_to_pm25 <- function( 
-  month.n = NULL,
-  fstart,
-  year.m = 2006,
-  model.dataset = preds.mon.idwe06w05,
-  model.name = 'model.cv', #'model.gam'
-  name.x = 'idwe',
-  mask.use = mask.usa,
-  ddm.m = ddm.m.all,
-  mets.m = mets.m.all,
-  emiss.m = d_nonegu.r,
-  idwe.m. = idwe.m,
-  hyads.m = hyads.m.all,
-  take.diff = T
+    month.n = NULL,
+    fstart,
+    year.m = 2006,
+    model.dataset = preds.mon.idwe06w05,
+    model.name = 'model.cv', #'model.gam'
+    name.x = 'idwe',
+    mask.use = mask.usa,
+    ddm.m = ddm.m.all,
+    mets.m = mets.m.all,
+    emiss.m = d_nonegu.r,
+    idwe.m. = idwe.m,
+    hyads.m = hyads.m.all,
+    take.diff = T
 ){
   message( paste( 'Converting', month.name[month.n]))
   
@@ -1296,16 +1314,17 @@ hyads_to_pm25 <- function(
 # output - data table of ugm3 impacts for all input units
 #======================================================================#
 hyads_to_pm25_unit <- function( 
-  year.m = 2006,
-  month.n = NULL,
-  fstart,
-  fstart_out,
-  model.dataset = preds.mon.idwe06w05,
-  model.name = 'model.cv', #'model.gam'
-  name.x = 'hyads',
-  mask.use = mask.usa,
-  met.dest = '/projects/HAQ_LAB/lhennem/data/disperseR/HyADS_to_pm25/met',
-  total = F
+    year.m = 2006,
+    month.n = NULL,
+    base_year_raw_hyads = dats2005.a$hyads,
+    fstart,
+    fstart_out,
+    model.dataset = preds.mon.idwe06w05,
+    model.name = 'model.cv', #'model.gam'
+    name.x = 'hyads',
+    mask.use = mask.usa,
+    met.dest = '/projects/HAQ_LAB/lhennem/data/disperseR/HyADS_to_pm25/met',
+    total = F
 ){
   message( paste( 'Converting', month.name[month.n], year.m))
   
@@ -1403,7 +1422,7 @@ hyads_to_pm25_unit <- function(
   # predict the base scenario
   dat.coords <- coordinates( dat.s)
   dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
-  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt)
+  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt, type = 'response')
   
   # create raster from base scenario
   dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = model.csr)
@@ -1426,16 +1445,24 @@ hyads_to_pm25_unit <- function(
     # set up the dataset
     dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
     
-    dat.pred <- predict( model.use, newdata = dat_raw.dt)
-    
+    # predict from the model
+    dat.pred <- predict( model.use, newdata = dat_raw.dt, type = 'response')
+
     # rasterize
     dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
     
     #take difference from base
     dats.r2 <- dats.r - dats0.r
     
-    names( dats.r2) <- n
-    return( dats.r2)
+    # use the fraction of total base year hyads to estimate fraction of base model PM
+    frac_base <- dat.use$hyads / base_year_raw_hyads
+    dat.pred.background <- dats0.r * frac_base
+    
+    # sum the contribution to background and hyads-related
+    dats.out <- dat.pred.background + dats.r2
+    
+    names( dats.out) <- n
+    return( dats.out)
   })
   
   if( total){
