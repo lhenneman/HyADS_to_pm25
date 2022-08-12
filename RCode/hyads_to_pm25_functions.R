@@ -486,7 +486,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   Y.ho.terms.lm2.cv <- predict( lm2.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
   Y.ho.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
   Y.ho.terms.dt <- data.table( dat.coords.ho, Y.ho.terms$fit)
-  Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit, Y.ho.terms.gam2.cv$fit)
+  Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit)
   
   # CHANGE
   # Y.tr.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.tr, se.fit = T, type = 'terms')
