@@ -457,7 +457,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                                     paste( c( x.name, covars.names), 
                                            collapse = '+'), ') ^2', 
                                     '+s( x, y, k = 100)'))
-   form.ncv <- as.formula( paste( y.name, '~', x.name))
+  form.ncv <- as.formula( paste( y.name, '~', x.name))
   lm.cv <-  gam( form.cv,  data = dat.stack.tr, family = 'poisson')
   lm2.cv <-  gam( form.cv2,  data = dat.stack.tr, family = 'poisson')
   lm.ncv <- gam( form.ncv, data = dat.stack.tr, family = 'poisson')
@@ -1317,7 +1317,8 @@ hyads_to_pm25_unit <- function(
     year.m = 2006,
     month.n = NULL,
     base_year_raw_hyads = dats2005.a$hyads,
-    fstart,
+    fstart = NULL,
+    fstart.total,
     fstart_out,
     model.dataset = preds.mon.idwe06w05,
     model.name = 'model.cv', #'model.gam'
@@ -1349,6 +1350,7 @@ hyads_to_pm25_unit <- function(
   if( is.null( month.n)){
     # define file nanmes
     fname <- paste0( fstart, year.m, '.fst')
+    fname.total <- paste0( fstart.total, year.m, '.fst')
     fname_out <- paste0( fstart_out, year.m, '.fst')
     
     # download met data
@@ -1373,6 +1375,7 @@ hyads_to_pm25_unit <- function(
     
     # define file nanmes
     fname <- paste0( fstart, year.m, '_', month.N, '.fst')
+    fname.total <- paste0( fstart.total, year.m, '_', month.N, '.fst')
     fname_out <- paste0( fstart_out, year.m, '_', month.N, '.fst')
     
     # download met data
@@ -1395,15 +1398,42 @@ hyads_to_pm25_unit <- function(
   mets.use.p <- projectRaster( mets.use.p, crs = model.csr)
   dat.s <- project_and_stack( model.rast, mets.use.p, mask.use = mask.use)
   
+  # read in total hyads
+  hyads.total.dt <- read.fst( fname.total, columns = c( 'x', 'y', 'hyads'), as.data.table = T)
+  hyads.total.r <- rasterFromXYZ( hyads.total.dt, crs = p4s)
+  
+  # predict with total hyads
+  dat.use.s<- copy( dat.s)
+  hyads.total.proj <- project_and_stack( dat.use.s, hyads.total.r, mask.use = mask.use)
+  
+  # predict the base scenario
+  dat.coords <- coordinates( hyads.total.proj)
+  dat_total.dt <- data.table( cbind( dat.coords, values( hyads.total.proj)))
+  dat.total.pred <- predict( model.use, newdata = dat_total.dt, type = 'response')
+  
   #read in, project hyads
   if( total){
-    hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'hyads'), as.data.table = T)
-    hyads.dt.c <- hyads.dt[!is.na( x) & !is.na( y)]
+    pred_pm.r <- rasterFromXYZ( data.table( dat.coords, dat.total.pred), crs = p4s) %>%
+      projectRaster( dat.use.s)
+    
+    # collect coordinates and values
+    coords.out <- coordinates( pred_pm.r)
+    vals.out <- values( pred_pm.r)
+    
+    # write out the data.table as fst
+    pred_pm.dt <- data.table( cbind( coords.out, vals.out))
+    # print( summary( pred_pm.dt[, 6:10]))
+    write_fst( pred_pm.dt, fname_out)
+    
+    note <- paste( 'Unit conversions saved to', fname_out)
+    message( note)
+    return( note)
+    
   } else {
     hyads.dt <- read.fst( fname, columns = c( 'x', 'y', 'uID', 'hyads'), as.data.table = T)
     hyads.dt <- hyads.dt[!is.na( x) & !is.na( y)]
     hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
-  }
+  
   
   hyads.use.p <- rasterFromXYZ( hyads.dt.c, crs = p4s)
   hyads.use.p[is.na( hyads.use.p)] <- 0
@@ -1413,28 +1443,28 @@ hyads_to_pm25_unit <- function(
   names( hyads.proj) <- hyads.n
   
   # create dataset to predict the base scenario (zero hyads)
-  dat.use0<- copy( dat.s)
-  r <- dat.use0[[1]]
-  names( r)<- name.x
-  dat.use0 <- addLayer( dat.use0, r)
-  dat.use0[[name.x]] <- 0
+  # dat.use0<- copy( dat.s)
+  # r <- dat.use0[[1]]
+  # names( r)<- name.x
+  # dat.use0 <- addLayer( dat.use0, r)
+  # dat.use0[[name.x]] <- 0
   
   # predict the base scenario
-  dat.coords <- coordinates( dat.s)
-  dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
-  dat.pred0 <- predict( model.use, newdata = dat_raw0.dt, type = 'response')
+  # dat.coords <- coordinates( dat.s)
+  # dat_raw0.dt <- data.table( cbind( dat.coords, values( dat.use0)))
+  # dat.pred0 <- predict( model.use, newdata = dat_raw0.dt, type = 'response')
   
   # create raster from base scenario
-  dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = model.csr)
+  # dats0.r <- rasterFromXYZ( data.table( dat.coords, dat.pred0), crs = model.csr)
   
   # do the predictions
-  pred_pm.r <- pbmcapply::pbmclapply( hyads.n, function( n){ 
+  pred_pm.r <- pbmcapply::pbmclapply( hyads.n[1:50], function( n){ 
     gc()
     n <- gsub( '#', '.', n)
     
     # assign unit to prediction dataset
     dat.use <- copy( dat.s)
-    r <- hyads.proj[[n]]
+    r <- hyads.total.proj[[name.x]] - hyads.proj[[n]]
     names( r)<- name.x
     dat.use <- addLayer( dat.use, r)
     
@@ -1447,15 +1477,15 @@ hyads_to_pm25_unit <- function(
     
     # predict from the model
     dat.pred <- predict( model.use, newdata = dat_raw.dt, type = 'response')
-
+    
     # rasterize
     dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
     
     #take difference from base
-    dats.r2 <- dats.r - dats0.r
+    dats.r2 <- pred_pm.r - dats.r# - dats0.r
     
     # use the fraction of total base year hyads to estimate fraction of base model PM
-    frac_base <- dat.use$hyads / base_year_raw_hyads
+    frac_base <- hyads.proj[[n]] / base_year_raw_hyads
     dat.pred.background <- dats0.r * frac_base
     
     # sum the contribution to background and hyads-related
