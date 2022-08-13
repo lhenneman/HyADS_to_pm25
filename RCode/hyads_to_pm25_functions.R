@@ -1411,10 +1411,18 @@ hyads_to_pm25_unit <- function(
   dat_total.dt <- data.table( cbind( dat.coords, values( hyads.total.proj)))
   dat.total.pred <- predict( model.use, newdata = dat_total.dt, type = 'response')
   
+  # predict a 0-hyads scenario
+  dat_0.dt <- dat_total.dt[, hyads := 0]
+  dat.0.pred <- predict( model.use, newdata = dat_0.dt, type = 'response')
+  
+  # predict pm into a raster
+  pred_pm.r <- rasterFromXYZ( data.table( dat.coords, dat.total.pred), crs = p4s) %>%
+    projectRaster( dat.use.s)
+  pred_0.r <- rasterFromXYZ( data.table( dat.coords, dat.0.pred), crs = p4s) %>%
+    projectRaster( dat.use.s)
+  
   #read in, project hyads
   if( total){
-    pred_pm.r <- rasterFromXYZ( data.table( dat.coords, dat.total.pred), crs = p4s) %>%
-      projectRaster( dat.use.s)
     
     # collect coordinates and values
     coords.out <- coordinates( pred_pm.r)
@@ -1467,11 +1475,11 @@ hyads_to_pm25_unit <- function(
       dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
       
       #take difference from base
-      dats.r2 <- pred_pm.r - dats.r# - dats0.r
+      dats.r2 <- pred_pm.r - dats.r# - pred_0.r
       
       # use the fraction of total base year hyads to estimate fraction of base model PM
       frac_base <- hyads.proj[[n]] / base_year_raw_hyads
-      dat.pred.background <- dats0.r * frac_base
+      dat.pred.background <- pred_0.r * frac_base
       
       # sum the contribution to background and hyads-related
       dats.out <- dat.pred.background + dats.r2
@@ -1480,7 +1488,7 @@ hyads_to_pm25_unit <- function(
       return( dats.out)
     })
     
-      pred_pm.r <- brick( pred_pm.r) %>%
+    pred_pm.r <- brick( pred_pm.r) %>%
       projectRaster( hyads.use.p)
     
     # collect coordinates and values
