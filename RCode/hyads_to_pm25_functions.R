@@ -447,8 +447,9 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   } 
   
   # check out linear regression models - define them
-  form.cv <-  as.formula( paste( y.name, '~ (', paste( c( x.name, covars.names), 
-                                                       collapse = '+'), ') ^2'))
+  form.cv <-  as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
+                                 paste( c( covars.names), 
+                                        collapse = '+'), ')^2'))
   form.cv2 <- as.formula( paste( y.name, '~ ', x.name, '* (', 
                                  paste( c( x.name, covars.names), 
                                         collapse = '+'), ') ^2'))
