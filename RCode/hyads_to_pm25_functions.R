@@ -1442,7 +1442,6 @@ hyads_to_pm25_unit <- function(
     hyads.dt <- hyads.dt[!is.na( x) & !is.na( y)]
     hyads.dt.c <- dcast( hyads.dt, x + y ~ uID, value.var = 'hyads')
     
-    
     hyads.use.p <- rasterFromXYZ( hyads.dt.c, crs = p4s)
     hyads.use.p[is.na( hyads.use.p)] <- 0
     hyads.proj <- project_and_stack( dat.s[[1]], hyads.use.p, mask.use = mask.use)
@@ -1450,50 +1449,56 @@ hyads_to_pm25_unit <- function(
     hyads.n <- paste0( 'X', names( hyads.dt.c)[!(names( hyads.dt.c) %in% c( 'x', 'y'))])
     names( hyads.proj) <- hyads.n
     
-    # do the predictions
-    pred_pm.r <- pbmcapply::pbmclapply( hyads.n, function( n){ 
-      gc()
-      n <- gsub( '#', '.', n)
-      
-      # assign unit to prediction dataset
-      dat.use <- copy( dat.s)
-      r <- hyads.total.proj[[name.x]] - hyads.proj[[n]]
-      names( r)<- name.x
-      dat.use <- addLayer( dat.use, r)
-      
-      # if zero impacts, return raster with only zeros
-      if( sum( values(hyads.proj[[n]]), na.rm = T) == 0)
-        return( hyads.proj[[n]])
-      
-      # set up the dataset
-      dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
-      
-      # predict from the model
-      dat.pred <- predict( model.use, newdata = dat_raw.dt, type = 'response')
-      
-      # rasterize
-      dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
-      
-      #take difference from base
-      dats.r2 <- pred_pm.r - dats.r# - pred_0.r
-      
-      # use the fraction of total base year hyads to estimate fraction of base model PM
-      frac_base <- hyads.proj[[n]] / base_year_raw_hyads
-      dat.pred.background <- pred_0.r * frac_base
-      
-      # sum the contribution to background and hyads-related
-      dats.out <- dat.pred.background + dats.r2
-      
-      names( dats.out) <- n
-      return( dats.out)
-    })
+    # take fraction of total hyads
+    hyads.frac.total <- hyads.proj / hyads.total.proj[[name.x]]
+    hyads.frac.total.pm <- hyads.frac.total * pred_pm.r
+    names( hyads.frac.total.pm) <- hyads.n
     
-    pred_pm.r <- brick( pred_pm.r) %>%
-      projectRaster( hyads.use.p)
-    
+    # 
+    # # do the predictions
+    # pred_pm.r <- pbmcapply::pbmclapply( hyads.n, function( n){ 
+    #   gc()
+    #   n <- gsub( '#', '.', n)
+    #   
+    #   # assign unit to prediction dataset
+    #   dat.use <- copy( dat.s)
+    #   r <- hyads.total.proj[[name.x]] - hyads.proj[[n]]
+    #   names( r)<- name.x
+    #   dat.use <- addLayer( dat.use, r)
+    #   
+    #   # if zero impacts, return raster with only zeros
+    #   if( sum( values(hyads.proj[[n]]), na.rm = T) == 0)
+    #     return( hyads.proj[[n]])
+    #   
+    #   # set up the dataset
+    #   dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
+    #   
+    #   # predict from the model
+    #   dat.pred <- predict( model.use, newdata = dat_raw.dt, type = 'response')
+    #   
+    #   # rasterize
+    #   dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
+    #   
+    #   #take difference from base
+    #   dats.r2 <- pred_pm.r - dats.r# - pred_0.r
+    #   
+    #   # use the fraction of total base year hyads to estimate fraction of base model PM
+    #   frac_base <- hyads.proj[[n]] / base_year_raw_hyads
+    #   dat.pred.background <- pred_0.r * frac_base
+    #   
+    #   # sum the contribution to background and hyads-related
+    #   dats.out <- dat.pred.background + dats.r2
+    #   
+    #   names( dats.out) <- n
+    #   return( dats.out)
+    # })
+    # 
+    # pred_pm.r <- brick( pred_pm.r) %>%
+    #   projectRaster( hyads.use.p)
+    # 
     # collect coordinates and values
-    coords.out <- coordinates( pred_pm.r)
-    vals.out <- values( pred_pm.r)
+    coords.out <- coordinates( hyads.frac.total.pm)
+    vals.out <- values( hyads.frac.total.pm)
     
     # write out the data.table as fst
     pred_pm.dt <- data.table( cbind( coords.out, vals.out))
