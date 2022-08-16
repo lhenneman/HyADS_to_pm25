@@ -463,7 +463,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                                     '+s( x, y, k = 100)'))
   form.ncv <- as.formula( paste( y.name, '~', x.name))
   lm.cv <-  gam( form.cv,  data = dat.stack.tr, family = 'poisson')
-  lm2.cv <-  gam( form.cv2,  data = dat.stack.tr, family = 'poisson')
+  lm2.cv <-  gam( form.cv2,  data = na.omit( dat.stack.tr), family = 'poisson')
   lm.ncv <- gam( form.ncv, data = dat.stack.tr, family = 'poisson')
   gam.cv <-  gam( form.cv.spl,  data = dat.stack.tr, family = 'poisson')
   
