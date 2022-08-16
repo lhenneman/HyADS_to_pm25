@@ -452,7 +452,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                                         collapse = '+'), ')^2'))
   form.cv2 <- as.formula( paste( y.name, '~ -1 +', x.name, ' +', x.name, ': (', 
                                  paste( c( covars.names), 
-                                        collapse = '+'), ')^4'))
+                                        collapse = '+'), ')'))
   # form.cv2 <- as.formula( paste( y.name, '~ ', x.name, '* (', 
   #                                paste( c( x.name, covars.names), 
   #                                       collapse = '+'), ') ^2'))
