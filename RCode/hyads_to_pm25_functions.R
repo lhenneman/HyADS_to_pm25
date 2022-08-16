@@ -450,9 +450,12 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   form.cv <-  as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
                                  paste( c( covars.names), 
                                         collapse = '+'), ')^2'))
-  form.cv2 <- as.formula( paste( y.name, '~ ', x.name, '* (', 
-                                 paste( c( x.name, covars.names), 
-                                        collapse = '+'), ') ^2'))
+  form.cv2 <- as.formula( paste( y.name, '~ -1 +', x.name, ' +', x.name, ': (', 
+                                 paste( c( covars.names), 
+                                        collapse = '+'), ')^2'))
+  # form.cv2 <- as.formula( paste( y.name, '~ ', x.name, '* (', 
+  #                                paste( c( x.name, covars.names), 
+  #                                       collapse = '+'), ') ^2'))
   ## k = 100 gives a minimum aic
   form.cv.spl <- as.formula( paste( y.name, '~ (', 
                                     paste( c( x.name, covars.names), 
