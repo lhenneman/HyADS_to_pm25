@@ -409,6 +409,21 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                                   ho.frac = .1,
                                   return.mods = F,
                                   ...){
+  # define eval function
+  eval.fn <- function( Yhat, Yact, mod.name){
+    num.diff <- sum( Yhat - Yact, na.rm = T)
+    abs.diff <- sum( abs( Yhat - Yact), na.rm = T)
+    denom <- sum( Yact, na.rm = T)
+    metrics <- data.table( mod.name = mod.name,
+                           NMB = num.diff / denom,
+                           NME = abs.diff / denom,
+                           MB   = num.diff / length( Yhat),
+                           RMSE = sqrt( sum( ( Yhat - Yact) ^ 2, na.rm = T) / length( Yhat)),
+                           R = cor( Yhat, Yact, use = 'complete.obs'),
+                           R.s = cor( Yhat, Yact, use = 'complete.obs', method = 'spearman'))
+    return( metrics)
+  }
+  
   set.seed( seed.n)
   
   # if no covar names provided, use all covariates that aren't x or y
@@ -447,82 +462,50 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   } 
   
   # check out linear regression models - define them
-  form.cv <-  as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
-                                 paste( c( covars.names), 
-                                        collapse = '+'), ')^2'))
-  form.cv2 <- as.formula( paste( y.name, '~ poly(', x.name, ', 2) +', x.name, ': (', 
-                                 paste( c( covars.names), 
-                                        collapse = '+'), ')'))
-  # form.cv2 <- as.formula( paste( y.name, '~ ', x.name, '* (', 
-  #                                paste( c( x.name, covars.names), 
-  #                                       collapse = '+'), ') ^2'))
-  ## k = 100 gives a minimum aic
-  form.cv.spl <- as.formula( paste( y.name, '~ (', 
-                                    paste( c( x.name, covars.names), 
-                                           collapse = '+'), ') ^2', 
-                                    '+s( x, y, k = 100)'))
   form.ncv <- as.formula( paste( y.name, '~', x.name))
-  lm.cv <-  gam( form.cv,  data = dat.stack.tr, family = 'poisson')
-  lm2.cv <-  gam( form.cv2,  data = na.omit( dat.stack.tr), family = 'poisson')
+  form.cv_single_poly <- 
+    as.formula( paste( y.name, '~ poly(', x.name, ', 2) +', x.name, ': (', 
+                       paste( c( covars.names), 
+                              collapse = '+'), ')'))
+  form.cv_single <-  
+    as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
+                       paste( c( covars.names), 
+                              collapse = '+'), ')'))
+  form.cv_five <- 
+    as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
+                       paste( c( covars.names), 
+                              collapse = '+'), ')^5'))
+  
+  # train the models
   lm.ncv <- gam( form.ncv, data = dat.stack.tr, family = 'poisson')
-  gam.cv <-  gam( form.cv.spl,  data = dat.stack.tr, family = 'poisson')
-  
-  # check out linear regression models - define them
-  mean.y.over.x <- mean( unlist( dat.stack.tr[,..y.name]) / unlist( dat.stack.tr[,..x.name]), na.rm = T)
-  mean.y <- mean( unlist( dat.stack.tr[,..y.name]), na.rm = T)
-  mean.x <- mean( unlist( dat.stack.tr[,..x.name]), na.rm = T)
-  sd.y <- sd( unlist( dat.stack.tr[,..y.name]), na.rm = T)
-  sd.x <- sd( unlist( dat.stack.tr[,..x.name]), na.rm = T)
-  
+  lm.cv_single <-  gam( form.cv_single,  data = dat.stack.tr, family = 'poisson')
+  lm.cv_single_poly <-  gam( form.cv_single_poly,  data = na.omit( dat.stack.tr), family = 'poisson')
+  lm.cv_five <-  gam( form.cv_five,  data = dat.stack.tr, family = 'poisson')
+
   # check out simpler models - get predicted Y.ho
   y.ho <- unlist( dat.stack.ho[,..y.name])
-  y.hat.lm.cv  <- predict( lm.cv,  type = 'response',  newdata = dat.stack.ho, se.fit = T)
-  y.hat.lm2.cv <- predict( lm2.cv, type = 'response', newdata = dat.stack.ho, se.fit = T)
-  y.hat.lm.ncv <- predict( lm.ncv,  type = 'response', newdata = dat.stack.ho, se.fit = T)
-  y.hat.gam.cv <- predict( gam.cv,  type = 'response', newdata = dat.stack.ho, se.fit = T)
-  y.hat.mean <- unlist( dat.stack.ho[,..x.name] * mean.y.over.x)
-  y.hat.Z <- unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x * sd.y + mean.y)
-  x.rscale.Z <-    unlist( (dat.stack.ho[,..x.name] - mean.x) / sd.x)
-  y.rscale.Z <-    unlist( (dat.stack.ho[,..y.name] - mean.y) / sd.y)
-  
-  # calculate covariate contributions
-  Y.ho.terms <- predict( lm.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
-  Y.ho.terms.lm2.cv <- predict( lm2.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
-  Y.ho.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.ho, se.fit = T, type = 'terms')
-  Y.ho.terms.dt <- data.table( dat.coords.ho, Y.ho.terms$fit)
-  Y.ho.terms.gam.cv.dt <- data.table( dat.coords.ho, Y.ho.terms.gam.cv$fit)
-  
-  # CHANGE
-  # Y.tr.terms.gam.cv <- predict( gam.cv,  newdata = dat.stack.tr, se.fit = T, type = 'terms')
-  # Y.tr.terms.gam.cv.dt <- data.table( dat.coords.tr, Y.tr.terms.gam.cv$fit)
-  # Y.tr.terms.gam.raster <- projectRaster( rasterFromXYZ( Y.tr.terms.gam.cv.dt, crs = crs.in), dat.stack)
-  # summary( values( Y.tr.terms.gam.raster - Y.ho.terms.gam.raster))
-  # summary( dat.stack.tr$cmaq.ddm - dat.stack.ho$cmaq.ddm)
-  # summary( dat.stack.tr$hyads - dat.stack.ho$hyads)
-  # summary( dat.stack.tr$idwe - dat.stack.ho$idwe)
-  
+  y.hat.lm.ncv  <- predict( lm.ncv,  type = 'response',  newdata = dat.stack.ho, se.fit = T)
+  y.hat.lm.cv_single <- predict( lm.cv_single, type = 'response', newdata = dat.stack.ho, se.fit = T)
+  y.hat.lm.cv_single_poly <- predict( lm.cv_single_poly,  type = 'response', newdata = dat.stack.ho, se.fit = T)
+  y.hat.lm.cv_five <- predict( lm.cv_five,  type = 'response', newdata = dat.stack.ho, se.fit = T)
+
   # set up evaluation data.table
   Y.ho.hat <- data.table( dat.coords.ho, y.ho, 
-                          y.hat.lm.cv = y.hat.lm.cv$fit, 
-                          y.hat.lm2.cv = y.hat.lm2.cv$fit, 
-                          y.hat.gam.cv = y.hat.gam.cv$fit, 
                           y.hat.lm.ncv = y.hat.lm.ncv$fit, 
-                          y.hat.mean, 
-                          y.hat.Z)
+                          y.hat.lm.cv_single = y.hat.lm.cv_single$fit, 
+                          y.hat.lm.cv_single_poly = y.hat.lm.cv_single_poly$fit, 
+                          y.hat.lm.cv_five = y.hat.lm.cv_five$fit)
   Y.ho.hat.bias <- data.table( dat.coords.ho, y.ho, 
-                               y.hat.lm.cv = y.hat.lm.cv$fit - y.ho, 
-                               y.hat.lm2.cv = y.hat.lm2.cv$fit - y.ho, 
                                y.hat.lm.ncv = y.hat.lm.ncv$fit - y.ho, 
-                               y.hat.gam.cv = y.hat.gam.cv$fit - y.ho, 
-                               y.hat.mean = y.hat.mean - y.ho, 
-                               y.hat.Z = y.hat.Z - y.ho)
+                               y.hat.lm.cv_single = y.hat.lm.cv_single$fit - y.ho, 
+                               y.hat.lm.cv_single_poly = y.hat.lm.cv_single_poly$fit - y.ho, 
+                               y.hat.lm.cv_five = y.hat.lm.cv_five$fit - y.ho)
   Y.ho.hat.se <- data.table( dat.coords.ho, 
-                             y.hat.lm.cv = y.hat.lm.cv$se.fit, 
-                             y.hat.lm2.cv = y.hat.lm2.cv$se.fit,  
-                             y.hat.gam.cv = y.hat.gam.cv$se.fit,  
-                             y.hat.lm.ncv = y.hat.lm.ncv$se.fit)
-  rscale.Z <- data.table( dat.coords.ho, x.rscale.Z, y.rscale.Z)
-  
+                             y.hat.lm.ncv = y.hat.lm.ncv$se.fit, 
+                             y.hat.lm.cv_single = y.hat.lm.cv_single$se.fit,  
+                             y.hat.lm.cv_single_poly = y.hat.lm.cv_single_poly$se.fit,  
+                             y.hat.lm.cv_five = y.hat.lm.cv_five$se.fit)
+
   # rasterize output for plots
   crs.in <- crs( dat.stack)
   Y.ho.hat.raster <- projectRaster( rasterFromXYZ( Y.ho.hat, crs = crs.in), dat.stack)
@@ -530,60 +513,20 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   Y.ho.terms.gam.raster <- projectRaster( rasterFromXYZ( Y.ho.terms.gam.cv.dt, crs = crs.in), dat.stack)
   Y.ho.hat.se.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.se, crs = crs.in), dat.stack)
   Y.ho.hat.bias.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.bias, crs = crs.in), dat.stack)
-  rscale.Z.raster <- projectRaster( rasterFromXYZ( rscale.Z, crs = crs.in), dat.stack)
-  
+
   # calculate evaluation metrics
-  eval.fn <- function( Yhat, Yact, mod.name){
-    num.diff <- sum( Yhat - Yact, na.rm = T)
-    abs.diff <- sum( abs( Yhat - Yact), na.rm = T)
-    denom <- sum( Yact, na.rm = T)
-    metrics <- data.table( mod.name = mod.name,
-                           NMB = num.diff / denom,
-                           NME = abs.diff / denom,
-                           MB   = num.diff / length( Yhat),
-                           RMSE = sqrt( sum( ( Yhat - Yact) ^ 2, na.rm = T) / length( Yhat)),
-                           R = cor( Yhat, Yact, use = 'complete.obs'),
-                           R.s = cor( Yhat, Yact, use = 'complete.obs', method = 'spearman'))
-    return( metrics)
-  }
-  metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.cv, y.ho, 'lm.cv'),
-                        eval.fn( Y.ho.hat$y.hat.lm2.cv, y.ho, 'lm2.cv'),
-                        eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
-                        eval.fn( Y.ho.hat$y.hat.gam.cv, y.ho, 'gam.cv'),
-                        eval.fn( Y.ho.hat$y.hat.mean, y.ho, 'adj.mean'),
-                        eval.fn( Y.ho.hat$y.hat.Z, y.ho, 'adj.Z'),
-                        eval.fn( y.rscale.Z, x.rscale.Z, 'adj.Z.only'))
-  
-  # calculate correlations along quantiles of idwe
-  # evals.q <- data.table()
-  # evals.qq <- data.table()
-  # if( ho.frac == 0){
-  #   vals.idwe <- unlist( data.table( values( dat.stack))[, ..name.idwe])
-  #   vals.eval <- data.table( values( Y.ho.hat.raster))
-  #   for ( s in seq( 0.01, 1, .01)){
-  #     q <- quantile( vals.idwe, s, na.rm = T)
-  #     vals.use <- vals.eval[vals.idwe < q,]
-  #     evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
-  #     evals.q <- rbind( evals.q, evals)
-  #   }
-  #   for ( s in seq( 0.05, 1, .05)){
-  #     q <- quantile( vals.idwe, s, na.rm = T)
-  #     qq <- quantile( vals.idwe, s - .05, na.rm = T)
-  #     vals.use <- vals.eval[vals.idwe < q & vals.idwe > qq,]
-  #     evals <- eval.fn( vals.use$y.hat.gam.cv, vals.use$y.ho, x.name)[, s := s]
-  #     evals.qq <- rbind( evals.qq, evals)
-  #   }
-  # }
+  metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
+                        eval.fn( Y.ho.hat$y.hat.lm.cv_single, y.ho, 'lm.cv_single'),
+                        eval.fn( Y.ho.hat$y.hat.lm.cv_single_poly, y.ho, 'lm.cv_single_poly'),
+                        eval.fn( Y.ho.hat$y.hat.lm.cv_five, y.ho, 'lm.cv_five'))
   
   # listify the models
   if( return.mods)
     out <- list( metrics = metrics.out, 
-                 # evals.q = evals.q,
-                 # evals.qq = evals.qq,
-                 model.cv = lm.cv,
-                 model.cv2 = lm2.cv,
-                 model.ncv = lm.ncv,
-                 model.gam = gam.cv,
+                 model.lm.ncv = lm.ncv,
+                 model.lm.cv_single = lm.cv_single,
+                 model.lm.cv_single_poly = lm.cv_single_poly,
+                 model.lm.cv_five = lm.cv_five,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
@@ -591,8 +534,6 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  Y.ho.terms.gam.raster = Y.ho.terms.gam.raster)
   if( !return.mods)
     out <- list( metrics = metrics.out, 
-                 # evals.q = evals.q,
-                 # evals.qq = evals.qq,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
