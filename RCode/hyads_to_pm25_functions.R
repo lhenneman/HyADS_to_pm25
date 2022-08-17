@@ -509,8 +509,6 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   # rasterize output for plots
   crs.in <- crs( dat.stack)
   Y.ho.hat.raster <- projectRaster( rasterFromXYZ( Y.ho.hat, crs = crs.in), dat.stack)
-  Y.ho.terms.raster <- projectRaster( rasterFromXYZ( Y.ho.terms.dt, crs = crs.in), dat.stack)
-  Y.ho.terms.gam.raster <- projectRaster( rasterFromXYZ( Y.ho.terms.gam.cv.dt, crs = crs.in), dat.stack)
   Y.ho.hat.se.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.se, crs = crs.in), dat.stack)
   Y.ho.hat.bias.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.bias, crs = crs.in), dat.stack)
 
@@ -529,16 +527,12 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  model.lm.cv_five = lm.cv_five,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
-                 Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
-                 Y.ho.terms.raster = Y.ho.terms.raster,
-                 Y.ho.terms.gam.raster = Y.ho.terms.gam.raster)
+                 Y.ho.hat.bias.raster = Y.ho.hat.bias.raster)
   if( !return.mods)
     out <- list( metrics = metrics.out, 
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
-                 Y.ho.hat.bias.raster = Y.ho.hat.bias.raster,
-                 Y.ho.terms.raster = Y.ho.terms.raster,
-                 Y.ho.terms.gam.raster = Y.ho.terms.gam.raster)
+                 Y.ho.hat.bias.raster = Y.ho.hat.bias.raster)
   
   return( out)
 }
