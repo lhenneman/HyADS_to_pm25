@@ -466,7 +466,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   form.cv_single_poly <- 
     as.formula( paste( y.name, '~ poly(', x.name, ', 2) +', x.name, ': (', 
                        paste( c( covars.names), 
-                              collapse = '+'), ')'))
+                              collapse = '+'), ')')) #, '+ s( x, y, k = 20)'
   form.cv_single <-  
     as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
                        paste( c( covars.names), 
@@ -481,14 +481,14 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   lm.cv_single <-  gam( form.cv_single,  data = dat.stack.tr, family = 'poisson')
   lm.cv_single_poly <-  gam( form.cv_single_poly,  data = na.omit( dat.stack.tr), family = 'poisson')
   lm.cv_five <-  gam( form.cv_five,  data = dat.stack.tr, family = 'poisson')
-
+  
   # check out simpler models - get predicted Y.ho
   y.ho <- unlist( dat.stack.ho[,..y.name])
   y.hat.lm.ncv  <- predict( lm.ncv,  type = 'response',  newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.cv_single <- predict( lm.cv_single, type = 'response', newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.cv_single_poly <- predict( lm.cv_single_poly,  type = 'response', newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.cv_five <- predict( lm.cv_five,  type = 'response', newdata = dat.stack.ho, se.fit = T)
-
+  
   # set up evaluation data.table
   Y.ho.hat <- data.table( dat.coords.ho, y.ho, 
                           y.hat.lm.ncv = y.hat.lm.ncv$fit, 
@@ -505,13 +505,13 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                              y.hat.lm.cv_single = y.hat.lm.cv_single$se.fit,  
                              y.hat.lm.cv_single_poly = y.hat.lm.cv_single_poly$se.fit,  
                              y.hat.lm.cv_five = y.hat.lm.cv_five$se.fit)
-
+  
   # rasterize output for plots
   crs.in <- crs( dat.stack)
   Y.ho.hat.raster <- projectRaster( rasterFromXYZ( Y.ho.hat, crs = crs.in), dat.stack)
   Y.ho.hat.se.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.se, crs = crs.in), dat.stack)
   Y.ho.hat.bias.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.bias, crs = crs.in), dat.stack)
-
+  
   # calculate evaluation metrics
   metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
                         eval.fn( Y.ho.hat$y.hat.lm.cv_single, y.ho, 'lm.cv_single'),
@@ -1360,12 +1360,15 @@ hyads_to_pm25_unit <- function(
   pred_0.r <- rasterFromXYZ( data.table( dat.coords, dat.0.pred), crs = p4s) %>%
     projectRaster( dat.use.s)
   
+  # remove mean
+  pred_nomean.r <- pred_pm.r - pred_0.r
+  
   #read in, project hyads
   if( total){
     
     # collect coordinates and values
-    coords.out <- coordinates( pred_pm.r)
-    vals.out <- values( pred_pm.r)
+    coords.out <- coordinates( pred_nomean.r)
+    vals.out <- values( pred_nomean.r)
     
     # write out the data.table as fst
     pred_pm.dt <- data.table( cbind( coords.out, vals.out))
@@ -1390,52 +1393,9 @@ hyads_to_pm25_unit <- function(
     
     # take fraction of total hyads
     hyads.frac.total <- hyads.proj / hyads.total.proj[[name.x]]
-    hyads.frac.total.pm <- hyads.frac.total * pred_pm.r
+    hyads.frac.total.pm <- hyads.frac.total * pred_nomean.r
     names( hyads.frac.total.pm) <- hyads.n
     
-    # 
-    # # do the predictions
-    # pred_pm.r <- pbmcapply::pbmclapply( hyads.n, function( n){ 
-    #   gc()
-    #   n <- gsub( '#', '.', n)
-    #   
-    #   # assign unit to prediction dataset
-    #   dat.use <- copy( dat.s)
-    #   r <- hyads.total.proj[[name.x]] - hyads.proj[[n]]
-    #   names( r)<- name.x
-    #   dat.use <- addLayer( dat.use, r)
-    #   
-    #   # if zero impacts, return raster with only zeros
-    #   if( sum( values(hyads.proj[[n]]), na.rm = T) == 0)
-    #     return( hyads.proj[[n]])
-    #   
-    #   # set up the dataset
-    #   dat_raw.dt <- data.table( cbind( dat.coords, values( dat.use)))
-    #   
-    #   # predict from the model
-    #   dat.pred <- predict( model.use, newdata = dat_raw.dt, type = 'response')
-    #   
-    #   # rasterize
-    #   dats.r <- rasterFromXYZ( data.table( dat.coords, dat.pred), crs = p4s)
-    #   
-    #   #take difference from base
-    #   dats.r2 <- pred_pm.r - dats.r# - pred_0.r
-    #   
-    #   # use the fraction of total base year hyads to estimate fraction of base model PM
-    #   frac_base <- hyads.proj[[n]] / base_year_raw_hyads
-    #   dat.pred.background <- pred_0.r * frac_base
-    #   
-    #   # sum the contribution to background and hyads-related
-    #   dats.out <- dat.pred.background + dats.r2
-    #   
-    #   names( dats.out) <- n
-    #   return( dats.out)
-    # })
-    # 
-    # pred_pm.r <- brick( pred_pm.r) %>%
-    #   projectRaster( hyads.use.p)
-    # 
-    # collect coordinates and values
     coords.out <- coordinates( hyads.frac.total.pm)
     vals.out <- values( hyads.frac.total.pm)
     
