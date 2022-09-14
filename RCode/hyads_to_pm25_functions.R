@@ -461,26 +461,30 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
     dat.stack.ho <- data.table( dat.coords.ho, values( dat.stack.pred))
   } 
   
+  # create log variables
+  dat.stack.tr[, y.name.log := log( get( y.name))]
+  dat.stack.ho[, y.name.log := log( get( y.name))]
+  
   # check out linear regression models - define them
-  form.ncv <- as.formula( paste( y.name, '~', x.name))
+  form.ncv <- as.formula( paste( 'y.name.log', '~', x.name))
   form.cv_single_poly <- 
-    as.formula( paste( y.name, '~ poly(', x.name, ', 2) +', x.name, ': (', 
+    as.formula( paste( 'y.name.log', '~ poly(', x.name, ', 2) +', x.name, ': (', 
                        paste( c( covars.names), 
                               collapse = '+'), ')')) #, '+ s( x, y, k = 20)'
   form.cv_single <-  
-    as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
+    as.formula( paste( 'y.name.log', '~ ', x.name, '+', x.name, ': (', 
                        paste( c( covars.names), 
                               collapse = '+'), ')'))
   form.cv_five <- 
-    as.formula( paste( y.name, '~ ', x.name, '+', x.name, ': (', 
+    as.formula( paste( 'y.name.log', '~ ', x.name, '+', x.name, ': (', 
                        paste( c( covars.names), 
                               collapse = '+'), ')^5'))
   
   # train the models
-  lm.ncv <- gam( form.ncv, data = dat.stack.tr, family = 'poisson')
-  lm.cv_single <-  gam( form.cv_single,  data = dat.stack.tr, family = 'poisson')
-  lm.cv_single_poly <-  gam( form.cv_single_poly,  data = na.omit( dat.stack.tr), family = 'poisson')
-  lm.cv_five <-  gam( form.cv_five,  data = dat.stack.tr, family = 'poisson')
+  lm.ncv <- lm( form.ncv, data = dat.stack.tr)
+  lm.cv_single <-  lm( form.cv_single,  data = dat.stack.tr)
+  lm.cv_single_poly <-  lm( form.cv_single_poly,  data = na.omit( dat.stack.tr))
+  lm.cv_five <-  lm( form.cv_five,  data = dat.stack.tr)
   
   # check out simpler models - get predicted Y.ho
   y.ho <- unlist( dat.stack.ho[,..y.name])
@@ -513,10 +517,10 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   Y.ho.hat.bias.raster <- projectRaster( rasterFromXYZ( Y.ho.hat.bias, crs = crs.in), dat.stack)
   
   # calculate evaluation metrics
-  metrics.out <- rbind( eval.fn( Y.ho.hat$y.hat.lm.ncv, y.ho, 'lm.ncv'),
-                        eval.fn( Y.ho.hat$y.hat.lm.cv_single, y.ho, 'lm.cv_single'),
-                        eval.fn( Y.ho.hat$y.hat.lm.cv_single_poly, y.ho, 'lm.cv_single_poly'),
-                        eval.fn( Y.ho.hat$y.hat.lm.cv_five, y.ho, 'lm.cv_five'))
+  metrics.out <- rbind( eval.fn( exp( Y.ho.hat$y.hat.lm.ncv), y.ho, 'lm.ncv'),
+                        eval.fn( exp( Y.ho.hat$y.hat.lm.cv_single), y.ho, 'lm.cv_single'),
+                        eval.fn( exp( Y.ho.hat$y.hat.lm.cv_single_poly), y.ho, 'lm.cv_single_poly'),
+                        eval.fn( exp( Y.ho.hat$y.hat.lm.cv_five), y.ho, 'lm.cv_five'))
   
   # listify the models
   if( return.mods)
