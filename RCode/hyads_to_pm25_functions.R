@@ -1352,11 +1352,13 @@ hyads_to_pm25_unit <- function(
   # predict the base scenario
   dat.coords <- coordinates( hyads.total.proj)
   dat_total.dt <- data.table( cbind( dat.coords, values( hyads.total.proj)))
-  dat.total.pred <- predict( model.use, newdata = dat_total.dt, type = 'response')
+  dat.total.pred <- predict( model.use, newdata = dat_total.dt) %>%
+    exp()
   
   # predict a 0-hyads scenario
   dat_0.dt <- dat_total.dt[, hyads := 0]
-  dat.0.pred <- predict( model.use, newdata = dat_0.dt, type = 'response')
+  dat.0.pred <- predict( model.use, newdata = dat_0.dt, type = 'response') %>%
+    exp()
   
   # predict pm into a raster
   pred_pm.r <- rasterFromXYZ( data.table( dat.coords, dat.total.pred), crs = p4s) %>%
