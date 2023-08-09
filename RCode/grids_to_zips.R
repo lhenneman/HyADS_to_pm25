@@ -29,6 +29,8 @@ zip_sf_reader <- function( d = direct.dat){
   return( zips)
 }
 
+po_box <- st_read('~//Dropbox/GeorgeMason/Research/Data/GIS/USA_Zip_Code_Points/v10/zip_usa.gdb')
+
 ## ==================================================== ##
 ##          load counties - just first 30 in TX
 ## ==================================================== ##
