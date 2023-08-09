@@ -3,7 +3,8 @@ rm( list = ls())
 source( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RCode/hyads_to_pm25_functions.R')
 
 #coordinate reference system projection string for spatial data
-p4s <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000"
+p4s_cmaq  <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=6370000 +b=6370000"
+p4s_hyads <- "+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m"
 
 #======================================================================#
 ## Load meteorology as list of months
@@ -63,43 +64,68 @@ names( ddm2006) <- 'cmaq.ddm'
 ## Load monthly hyads
 #======================================================================#
 # read monthly grid files
+hyads_exp_loc <- '~/Dropbox/Harvard/ARP/HyADS/hyads_longterm/exp/grids'
+
+# list annual and monthly files
+grid.files.m <- list.files( hyads_exp_loc,
+                            pattern = 'grids_exposures_total_\\d{4}_\\d{2}\\.fst',
+                            full.names = TRUE)
+grid.files.yr <- list.files( hyads_exp_loc,
+                             pattern = 'grids_exposures_total_\\d{4}\\.fst',
+                             full.names = TRUE)
+
+# read select files
+grid.dat.yr <- lapply( grid.files.yr,
+                       function( f){
+                         year.f <- gsub( '^.*_|\\.fst', '', f)
+                         if( !( year.f %in% c( '2005', '2006', '2011')))
+                           return( data.table( ))
+                         
+                         in.f <- read.fst( f, as.data.table = T)
+                         in.f[, `:=` (year = year.f,
+                                      year.E = NULL,
+                                      year.D = NULL)]
+                       }) %>% rbindlist
+grid.dat.m <- lapply( grid.files.m,
+                       function( f){
+                         year.m <- gsub( '^.*total_|\\.fst', '', f)
+                         year.f <- gsub( '_.*', '', year.m)
+                         if( !( year.f %in% c( '2005', '2006', '2011')))
+                           return( data.table( ))
+                         
+                         in.f <- read.fst( f, as.data.table = T)
+                       }) %>% rbindlist
+
 hyads2005.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_month_nopbl2005.csv', drop = 'V1')
 hyads2006.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_month_nopbl2006.csv', drop = 'V1')
 hyads2011.m.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_month_nopbl2011.csv', drop = 'V1')
 
 # create lists from monthly grid objects
-hyads2005.m.l <- split( hyads2005.m.dt, by = 'yearmonth')
-hyads2006.m.l <- split( hyads2006.m.dt, by = 'yearmonth')
-hyads2011.m.l <- split( hyads2011.m.dt, by = 'yearmonth')
-names( hyads2005.m.l) <- names( mets2005.m)
-names( hyads2006.m.l) <- names( mets2006.m)
-names( hyads2011.m.l) <- names( mets2011.m)
+hyads.m.l <- split( grid.dat.m, by = 'yearmonth')
+hyads.y.l <- split( grid.dat.yr, by = 'year')
+names( hyads.m.l) <- names( mets.m.all)
 
 # create lists of monthly rasters
 HyADSrasterizer <- function( X){
-  r <- rasterFromXYZ( X[, .( x, y, hyads)], crs = p4s)
+  r <- rasterFromXYZ( X[, .( x, y, hyads)], crs = p4s_hyads)
   r[is.na( r)] <- 0
   return( r)
 }
 
-hyads2005.m <- lapply( hyads2005.m.l, HyADSrasterizer)
-hyads2006.m <- lapply( hyads2006.m.l, HyADSrasterizer)
-hyads2011.m <- lapply( hyads2011.m.l, HyADSrasterizer)
-
 # combine into single list
-hyads.m.all <- stack( stack( hyads2005.m), stack( hyads2006.m), stack( hyads2011.m))
-
+hyads.m.all <- lapply( hyads.m.l, HyADSrasterizer) %>% stack()
+hyads.y.all <- lapply( hyads.y.l, HyADSrasterizer) %>% stack()
 
 #======================================================================#
 ## Load anuual hyads
 #======================================================================#
-hyads2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_annual_nopbl_2005.csv', drop = 'V1')
-hyads2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_annual_nopbl_2006.csv', drop = 'V1')
-hyads2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/HyADS_grid/gridexposures/HyADS_grid_annual_nopbl_2011.csv', drop = 'V1')
-hyads2005 <- rasterFromXYZ( hyads2005.dt[, .( x, y, hyads)], crs = p4s)
-hyads2006 <- rasterFromXYZ( hyads2006.dt[, .( x, y, hyads)], crs = p4s)
-hyads2011 <- rasterFromXYZ( hyads2011.dt[, .( x, y, hyads)], crs = p4s)
+hyads2005 <- hyads.y.all$X2005
+hyads2006 <- hyads.y.all$X2006
+hyads2011 <- hyads.y.all$X2011
 
+names( hyads2005) <- 'hyads'
+names( hyads2006) <- 'hyads'
+names( hyads2011) <- 'hyads'
 
 ## ========================================================= ##
 ##                Read in emissions data
@@ -117,7 +143,7 @@ d_nonegu.slim <- d_nonegu[ POLCODE == 'SO2', .( XLOC, YLOC, ANN_EMIS)]
 d_nonegu.sp <- SpatialPointsDataFrame( d_nonegu.slim[, .( XLOC, YLOC)], 
                                        data.frame( d_nonegu.slim[, ANN_EMIS]),
                                        proj4string = CRS( "+proj=longlat +datum=WGS84 +no_defs"))
-d_nonegu.sp <- spTransform( d_nonegu.sp, CRS( p4s))
+d_nonegu.sp <- spTransform( d_nonegu.sp, CRS( p4s_cmaq))
 d_nonegu.r <- rasterize( d_nonegu.sp, ddm.m.all)$d_nonegu.slim...ANN_EMIS.
 d_nonegu.r[is.na(d_nonegu.r[])] <- 0
 
@@ -130,7 +156,7 @@ idwe.m.l <- split( idwe.m.dt, by = 'yearmon')
 
 # create lists of monthly rasters
 IDWErasterizer <- function( X){
-  r <- rasterFromXYZ( X[, .( x, y, tot.sum)], crs = p4s)
+  r <- rasterFromXYZ( X[, .( x, y, tot.sum)], crs = p4s_cmaq)
   r[is.na( r)] <- 0
   return( r)
 }
@@ -144,9 +170,9 @@ names( idwe.m) <- names( hyads.m.all)
 idwe2005.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2005_total.csv', drop = 'V1')
 idwe2006.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2006_total.csv', drop = 'V1')
 idwe2011.dt <- fread( '~/Dropbox/Harvard/RFMeval_Local/HyADS_to_pm25/RData/ampd_dists_sox_weighted_2011_total.csv', drop = 'V1')
-idwe2005 <- rasterFromXYZ( idwe2005.dt, crs = p4s)
-idwe2006 <- rasterFromXYZ( idwe2006.dt, crs = p4s)
-idwe2011 <- rasterFromXYZ( idwe2011.dt, crs = p4s)
+idwe2005 <- rasterFromXYZ( idwe2005.dt, crs = p4s_cmaq)
+idwe2006 <- rasterFromXYZ( idwe2006.dt, crs = p4s_cmaq)
+idwe2011 <- rasterFromXYZ( idwe2011.dt, crs = p4s_cmaq)
 names( idwe2005) <- 'idwe'
 names( idwe2006) <- 'idwe'
 names( idwe2011) <- 'idwe'
@@ -161,7 +187,7 @@ summary(( idwe2006 - idwe2005) / idwe2005)
 # get usa mask for masking
 # download USA polygon from rnaturalearth
 us_states.names <- state.abb[!(state.abb %in% c( 'HI', 'AK'))]
-us_states <- st_transform( USAboundaries::us_states(), p4s)
+us_states <- st_transform( USAboundaries::us_states(), p4s_hyads)
 mask.usa <- sf::as_Spatial(us_states)[ us_states$state_abbr %in% us_states.names,]
 
 plot( ( hyads2006 - hyads2005) / hyads2005)
@@ -185,11 +211,11 @@ plot(mask.usa, add = T)
 #======================================================================#
 # stack up and project annual data
 #======================================================================#
-dats2005.a <- project_and_stack( ddm2005, hyads2005, idwe2005, 
+dats2005.a <- project_and_stack( hyads2005, ddm2005, idwe2005, 
                                  mets2005, d_nonegu.r, mask.use = mask.usa)
-dats2006.a <- project_and_stack( ddm2006, hyads2006, idwe2006, 
+dats2006.a <- project_and_stack( hyads2006, ddm2006, idwe2006, 
                                  mets2006, d_nonegu.r, mask.use = mask.usa)
-dats2011.a <- project_and_stack( ddm2006, hyads2011, idwe2011, 
+dats2011.a <- project_and_stack( hyads2011, ddm2006, idwe2011, 
                                  mets2011, d_nonegu.r, mask.use = mask.usa)
 dats2011.a$cmaq.ddm <- NA
 
@@ -458,10 +484,10 @@ gamters.mon06w05.hyadssum <- stack( lapply( colnames( preds.mon.hyads06w05),
                                                      subset( preds.mon.hyads06w05['Y.ho.terms.gam.raster', x][[1]], 's.x.y.'))
                                             }))
 gamters.mon06w05.idwesum <- stack( lapply( colnames( preds.mon.idwe06w05), 
-                                            function( x) {
-                                              stack( sum( subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], covs.idwe)),
-                                                     subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], 's.x.y.'))
-                                            }))
+                                           function( x) {
+                                             stack( sum( subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], covs.idwe)),
+                                                    subset( preds.mon.idwe06w05['Y.ho.terms.gam.raster', x][[1]], 's.x.y.'))
+                                           }))
 names.gamters.hy <- paste( c( 'hyads', 's.x.y.'), rep( month.abb, each = 2))
 names.gamters.is <- paste( c( 'idwe', 's.x.y.'), rep( month.abb, each = 2))
 ggplot.a.raster( unstack( gamters.mon06w05.hyadssum),
