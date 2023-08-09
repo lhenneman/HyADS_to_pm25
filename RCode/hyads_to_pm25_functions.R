@@ -646,9 +646,9 @@ month.trainer <- function( name.m = names( mets2005.m)[1],
   names( idwe.use.p) <- 'tot.sum.idwe'
   
   # combine each dataset as stacks
-  dat.s <- project_and_stack( ddm.use,   hyads.use,   idwe.use,   
+  dat.s <- project_and_stack( hyads.use,   ddm.use,   idwe.use,   
                               mets.use, emiss.use, mask.use = .mask.use)
-  dat.p <- project_and_stack( ddm.use.p, hyads.use.p, idwe.use.p, 
+  dat.p <- project_and_stack( hyads.use.p, ddm.use.p, idwe.use.p, 
                               mets.use.p, emiss.use, mask.use = .mask.use)
   
   # do the modeling
@@ -718,6 +718,7 @@ state_exposurer <- function(
     hyads.m = hyads.m.all,
     grid_pop.r = grid_popwgt.r,
     state_pops = copy( us_states.pop.dt),
+    p4s,
     take.diff = F,
     xboost = F
 ){
@@ -897,6 +898,7 @@ state_exposurer.year <- function(
     dat.a = dats2006.a,
     grid_pop.r = grid_popwgt.r,
     state_pops = copy( us_states.pop.dt),
+    p4s,
     take.diff = F,
     xboost = F,
     raw = F
@@ -1081,7 +1083,8 @@ hyads_to_pm25 <- function(
     emiss.m = d_nonegu.r,
     idwe.m. = idwe.m,
     hyads.m = hyads.m.all,
-    take.diff = T
+    take.diff = T,
+    p4s
 ){
   message( paste( 'Converting', month.name[month.n]))
   
@@ -1259,7 +1262,6 @@ hyads_to_pm25 <- function(
 hyads_to_pm25_unit <- function( 
     year.m = 2006,
     month.n = NULL,
-    base_year_raw_hyads = dats2005.a$hyads,
     fstart = NULL,
     fstart.total,
     fstart_out,
@@ -1268,7 +1270,8 @@ hyads_to_pm25_unit <- function(
     name.x = 'hyads',
     mask.use = mask.usa,
     met.dest = '/projects/HAQ_LAB/lhennem/data/disperseR/HyADS_to_pm25/met',
-    total = F
+    total = F,
+    p4s
 ){
   message( paste( 'Converting', month.name[month.n], year.m))
   
@@ -1332,7 +1335,7 @@ hyads_to_pm25_unit <- function(
     model.use <- model.dataset[ model.name, model.m][[1]]
     
     # get the prediction crs
-    model.rast <- preds.mon.idwe06w05['Y.ho.hat.raster',][[model.m]]
+    model.rast <- model.dataset['Y.ho.hat.raster',][[model.m]]
     model.csr <- crs( model.rast)
     
   }
