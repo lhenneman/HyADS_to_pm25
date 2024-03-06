@@ -467,6 +467,10 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   
   # check out linear regression models - define them
   form.ncv <- as.formula( paste( 'y.name.log', '~', x.name))
+  form.cv <-  
+    as.formula( paste( 'y.name.log', '~ ', x.name, '+', 
+                       paste( c( covars.names), 
+                              collapse = '+')))
   form.cv_single_poly <- 
     as.formula( paste( 'y.name.log', '~ poly(', x.name, ', 2) +', x.name, ': (', 
                        paste( c( covars.names), 
@@ -485,6 +489,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   lm.cv_single <-  lm( form.cv_single,  data = dat.stack.tr)
   lm.cv_single_poly <-  lm( form.cv_single_poly,  data = na.omit( dat.stack.tr))
   lm.cv_five <-  lm( form.cv_five,  data = dat.stack.tr)
+  rf.cv <- randomForest( form.cv, data = na.omit( dat.stack.tr))
   
   # check out simpler models - get predicted Y.ho
   y.ho <- unlist( dat.stack.ho[,..y.name])
@@ -492,18 +497,21 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   y.hat.lm.cv_single <- predict( lm.cv_single, type = 'response', newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.cv_single_poly <- predict( lm.cv_single_poly,  type = 'response', newdata = dat.stack.ho, se.fit = T)
   y.hat.lm.cv_five <- predict( lm.cv_five,  type = 'response', newdata = dat.stack.ho, se.fit = T)
+  y.hat.rf.cv <- predict( rf.cv, type = 'response', newdata = dat.stack.ho, se.fit = T)
   
   # set up evaluation data.table
   Y.ho.hat <- data.table( dat.coords.ho, y.ho, 
                           y.hat.lm.ncv = y.hat.lm.ncv$fit, 
                           y.hat.lm.cv_single = y.hat.lm.cv_single$fit, 
                           y.hat.lm.cv_single_poly = y.hat.lm.cv_single_poly$fit, 
-                          y.hat.lm.cv_five = y.hat.lm.cv_five$fit)
+                          y.hat.lm.cv_five = y.hat.lm.cv_five$fit,
+                          y.hat.rf.cv = y.hat.rf.cv)
   Y.ho.hat.bias <- data.table( dat.coords.ho, y.ho, 
                                y.hat.lm.ncv = y.hat.lm.ncv$fit - y.ho, 
                                y.hat.lm.cv_single = y.hat.lm.cv_single$fit - y.ho, 
                                y.hat.lm.cv_single_poly = y.hat.lm.cv_single_poly$fit - y.ho, 
-                               y.hat.lm.cv_five = y.hat.lm.cv_five$fit - y.ho)
+                               y.hat.lm.cv_five = y.hat.lm.cv_five$fit - y.ho, 
+                               y.hat.rf.cv = y.hat.rf.cv - y.ho)
   Y.ho.hat.se <- data.table( dat.coords.ho, 
                              y.hat.lm.ncv = y.hat.lm.ncv$se.fit, 
                              y.hat.lm.cv_single = y.hat.lm.cv_single$se.fit,  
@@ -520,7 +528,8 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
   metrics.out <- rbind( eval.fn( exp( Y.ho.hat$y.hat.lm.ncv), y.ho, 'lm.ncv'),
                         eval.fn( exp( Y.ho.hat$y.hat.lm.cv_single), y.ho, 'lm.cv_single'),
                         eval.fn( exp( Y.ho.hat$y.hat.lm.cv_single_poly), y.ho, 'lm.cv_single_poly'),
-                        eval.fn( exp( Y.ho.hat$y.hat.lm.cv_five), y.ho, 'lm.cv_five'))
+                        eval.fn( exp( Y.ho.hat$y.hat.lm.cv_five), y.ho, 'lm.cv_five'),
+                        eval.fn( exp( Y.ho.hat$y.hat.rf.cv), y.ho, 'rf.cv'))
   
   # listify the models
   if( return.mods)
@@ -529,6 +538,7 @@ lm.hyads.ddm.holdout <- function( seed.n = NULL,
                  model.lm.cv_single = lm.cv_single,
                  model.lm.cv_single_poly = lm.cv_single_poly,
                  model.lm.cv_five = lm.cv_five,
+                 model.rf.cve = rf.cv,
                  Y.ho.hat.raster = Y.ho.hat.raster, 
                  Y.ho.hat.se.raster = Y.ho.hat.se.raster,
                  Y.ho.hat.bias.raster = Y.ho.hat.bias.raster)
